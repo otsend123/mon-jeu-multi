@@ -1,0 +1,9 @@
+{
+  "name": "mon-jeu-multi",
+  "version": "1.0.0",
+  "scripts": {
+    "install-all": "npm install --prefix client && npm install --prefix server",
+    "start-client": "npm start --prefix client",
+    "start-server": "node server/index.js"
+  }
+}
