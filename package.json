@@ -1,9 +1,16 @@
 {
-  "name": "mon-jeu-multi",
+  "name": "server",
   "version": "1.0.0",
+  "main": "index.js",
   "scripts": {
-    "install-all": "npm install --prefix client && npm install --prefix server",
-    "start-client": "npm start --prefix client",
-    "start-server": "node server/index.js"
+    "start": "node index.js",
+    "postinstall": "prisma generate"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.0.0",
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
   }
 }
