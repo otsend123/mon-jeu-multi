@@ -1,17 +1,7 @@
 {
-  "name": "server",
+  "name": "mon-jeu-multi-root",
   "version": "1.0.0",
-  "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "postinstall": "npx prisma generate"
-  },
-  "dependencies": {
-    "@prisma/client": "^6.0.0",
-    "bcrypt": "^5.1.1",
-    "cors": "^2.8.5",
-    "express": "^4.18.2",
-    "socket.io": "^4.7.2",
-    "socket.io-client": "^4.8.3"
+    "postinstall": "npm install --prefix server && npm install --prefix client && npx prisma generate --schema=./server/prisma/schema.prisma"
   }
 }
