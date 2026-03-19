@@ -15,7 +15,8 @@ function AdQuizGame({ currentLobby, socket, user }) {
         setIsVideoFinished(false);
         if (videoRef.current) {
             videoRef.current.load();
-            videoRef.current.play().catch(() => {});
+            // Si le navigateur bloque, le joueur utilisera les contrôles pour lancer
+            videoRef.current.play().catch(e => console.log("Autoplay bloqué par le navigateur :", e));
         }
     }, [gs?.currentQuestionIndex]);
 
@@ -63,33 +64,39 @@ function AdQuizGame({ currentLobby, socket, user }) {
                                 ⏱️ {timeLeft}s
                             </div>
                         </div>
+
+                        {/* 🔥 L'attribut 'controls' est la clé ici ! */}
                         <video
                             ref={videoRef}
                             src={`/${currentQ.videoUrl}`}
+                            controls
+                            playsInline
                             onEnded={() => setIsVideoFinished(true)}
-                            style={{width: '100%', maxHeight: '350px', borderRadius: '10px', border: '2px solid #0f3460'}}
+                            style={{width: '100%', maxHeight: '350px', borderRadius: '10px', border: '2px solid #0f3460', backgroundColor: '#000'}}
                         />
+
                         {isVideoFinished && (
                             <div className="quiz-options" style={{marginTop: '20px'}}>
                                 {currentQ.options.map((opt, i) => (
-                                    <button key={i} className="btn-cyber quiz-btn" onClick={() => submitAnswer(opt)} disabled={hasAnswered}>
+                                    <button key={i} className={`btn-cyber quiz-btn ${hasAnswered ? 'btn-disabled' : ''}`} onClick={() => submitAnswer(opt)} disabled={hasAnswered}>
                                         {opt}
                                     </button>
                                 ))}
                             </div>
                         )}
-                        <div style={{marginTop: '20px', display: 'flex', justifyContent: 'space-between'}}>
+                        <div style={{marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                             <button className="btn-cyber btn-small" onClick={handleReplay} disabled={replaysLeft === 0 || hasAnswered}>
                                 🔄 Revoir ({replaysLeft}/3)
                             </button>
                             {isHost && hasAnswered && (
-                                <button className="btn-cyber btn-small" style={{background: '#ff2e63'}} onClick={() => socket.emit('forceNextRound', currentLobby.id)}>Forcer ⚡</button>
+                                <button className="btn-cyber btn-small" style={{background: '#ff2e63', border: 'none'}} onClick={() => socket.emit('forceNextRound', currentLobby.id)}>Forcer ⚡</button>
                             )}
                         </div>
                     </>
                 ) : (
                     <div className="result-area">
-                        <p className="correct-answer-text">Réponse : <strong>{currentQ.correct}</strong></p>
+                        <h2>Fin du temps !</h2>
+                        <p className="correct-answer-text">Réponse : <br/><strong>{currentQ.correct}</strong></p>
                     </div>
                 )}
             </div>
