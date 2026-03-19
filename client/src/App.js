@@ -33,7 +33,6 @@ function App() {
     useEffect(() => {
         if (!user) return;
 
-        // Si la socket est déjà prête, on rejoint direct
         if (socket.connected) {
             socket.emit('joinGame', user);
         }
@@ -47,8 +46,10 @@ function App() {
         socket.on('lobbyUpdated', (lobby) => setCurrentLobby(lobby));
         socket.on('lobbyLeft', () => setCurrentLobby(null));
         socket.on('roomError', (msg) => alert(msg));
+
         socket.on('receiveInvite', (data) => setInvite(data));
         socket.on('receiveMessage', (newMsg) => setMessages((prev) => [...prev, newMsg]));
+
         socket.on('gameStarted', (lobby) => setCurrentLobby(lobby));
         socket.on('roundResult', (lobby) => setCurrentLobby(lobby));
         socket.on('nextQuestion', (lobby) => setCurrentLobby(lobby));
@@ -80,7 +81,8 @@ function App() {
             socket.off('gameOver');
             socket.off('forceDisconnect');
         };
-        // 🔥 L'ASTUCE EST ICI : on utilise user?.id pour ne pas re-déclencher la connexion
+        // 🔥 On demande à React d'ignorer l'avertissement sur cette ligne précise
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user?.id]);
 
     useEffect(() => {
