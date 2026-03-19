@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
 import './App.css';
 
-// ⚠️ VERIFIE CETTE URL DANS TON DASHBOARD RAILWAY
+// ⚠️ MODIFIE CETTE URL AVEC TON LIEN PUBLIC RAILWAY
 const API_URL = "https://scintillating-inspiration-production.up.railway.app";
 const socket = io(API_URL);
 const AVATARS = ['🕹️', '👽', '🤖', '👻', '👾', '👨‍🚀', '🐱', '🐲', '🐼', '🦊'];
@@ -25,10 +25,9 @@ function App() {
 
     const handleAuth = async (e) => {
         e.preventDefault();
-        setError('Connexion en cours...');
-        const path = isLogin ? '/login' : '/register';
+        setError('Tentative de connexion...');
         try {
-            const res = await fetch(`${API_URL}${path}`, {
+            const res = await fetch(`${API_URL}${isLogin ? '/login' : '/register'}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(form)
@@ -47,43 +46,44 @@ function App() {
     };
 
     const updateAvatar = async (emoji) => {
-        const res = await fetch(`${API_URL}/api/user/update-avatar`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userId: user.id, avatar: emoji })
-        });
-        if (res.ok) {
-            const updated = { ...user, avatar: emoji };
-            setUser(updated);
-            localStorage.setItem('user', JSON.stringify(updated));
-            socket.emit('changeAvatar', emoji);
-            setShowModal(false);
+        try {
+            const res = await fetch(`${API_URL}/api/user/update-avatar`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ userId: user.id, avatar: emoji })
+            });
+            if (res.ok) {
+                const updated = { ...user, avatar: emoji };
+                setUser(updated);
+                localStorage.setItem('user', JSON.stringify(updated));
+                socket.emit('changeAvatar', emoji);
+                setShowModal(false);
+            }
+        } catch (e) {
+            console.error(e);
         }
     };
 
+    // --- ECRAN AUTHENTIFICATION ---
     if (!user) {
         return (
             <div className="auth-container">
                 <h1 className="title-cyber">{isLogin ? 'CONNEXION' : 'INSCRIPTION'}</h1>
                 <form onSubmit={handleAuth}>
-                    {!isLogin && (
-                        <input type="text" placeholder="Pseudo" required
-                               onChange={e => setForm({...form, pseudo: e.target.value})} />
-                    )}
-                    <input type="email" placeholder="Email" required
-                           onChange={e => setForm({...form, email: e.target.value})} />
-                    <input type="password" placeholder="Mot de passe" required
-                           onChange={e => setForm({...form, password: e.target.value})} />
+                    {!isLogin && <input type="text" placeholder="Pseudo" required onChange={e => setForm({...form, pseudo: e.target.value})} />}
+                    <input type="email" placeholder="Email" required onChange={e => setForm({...form, email: e.target.value})} />
+                    <input type="password" placeholder="Mot de passe" required onChange={e => setForm({...form, password: e.target.value})} />
                     <button type="submit" className="btn-cyber">{isLogin ? 'Entrer' : 'S\'inscrire'}</button>
                 </form>
-                {error && <p className="error-msg" style={{color: '#ff2e63', marginTop: '10px'}}>{error}</p>}
-                <p className="toggle-auth" onClick={() => setIsLogin(!isLogin)} style={{cursor:'pointer', marginTop:'15px'}}>
+                {error && <p className="error-msg">{error}</p>}
+                <p className="toggle-auth" onClick={() => setIsLogin(!isLogin)}>
                     {isLogin ? "Pas de compte ? S'inscrire" : "Déjà inscrit ? Connexion"}
                 </p>
             </div>
         );
     }
 
+    // --- ECRAN LOBBY ---
     return (
         <div className="App">
             <header className="header-cyber">
@@ -92,7 +92,7 @@ function App() {
                     <div className="header-avatar">{user.avatar}</div>
                     <span>{user.pseudo}</span>
                 </div>
-                <button className="btn-disconnect" onClick={() => {localStorage.clear(); window.location.reload();}}>Déconnexion</button>
+                <button className="btn-disconnect" onClick={() => {localStorage.clear(); window.location.reload();}}>Quitter</button>
             </header>
 
             <main className="lobby-content">
@@ -108,8 +108,8 @@ function App() {
             </main>
 
             {showModal && (
-                <div className="modal-overlay">
-                    <div className="avatar-modal">
+                <div className="modal-overlay" onClick={() => setShowModal(false)}>
+                    <div className="avatar-modal" onClick={e => e.stopPropagation()}>
                         <h2 className="modal-title">Choisir Avatar</h2>
                         <div className="avatar-selection-grid">
                             {AVATARS.map(emoji => (

@@ -9,7 +9,7 @@ const app = express();
 const server = http.createServer(app);
 const prisma = new PrismaClient();
 
-// Configuration Socket.IO
+// Configuration Socket.io (Autorise tout pour le test)
 const io = new Server(server, {
     cors: { origin: "*", methods: ["GET", "POST"] }
 });
@@ -17,7 +17,7 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
-// --- TEMPS RÉEL ---
+// --- LOGIQUE TEMPS RÉEL ---
 let connectedUsers = new Map();
 
 io.on('connection', (socket) => {
@@ -44,22 +44,29 @@ io.on('connection', (socket) => {
     });
 });
 
-// --- API ROUTES ---
+// --- ROUTES API ---
 
+// Inscription
 app.post('/register', async (req, res) => {
     try {
         const { email, pseudo, password } = req.body;
         const hashedPassword = await bcrypt.hash(password, 10);
         const newUser = await prisma.user.create({
-            data: { email: email.toLowerCase(), pseudo, password: hashedPassword, avatar: '🕹️' }
+            data: {
+                email: email.toLowerCase(),
+                pseudo,
+                password: hashedPassword,
+                avatar: '🕹️'
+            }
         });
         res.status(201).json({ user: { id: newUser.id, pseudo: newUser.pseudo, avatar: newUser.avatar } });
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: "L'email ou le pseudo est déjà utilisé." });
+        res.status(500).json({ error: "Erreur : Email déjà pris ou base non prête." });
     }
 });
 
+// Connexion
 app.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -67,11 +74,14 @@ app.post('/login', async (req, res) => {
         if (user && await bcrypt.compare(password, user.password)) {
             res.json({ user: { id: user.id, pseudo: user.pseudo, avatar: user.avatar } });
         } else {
-            res.status(401).json({ error: "Identifiants incorrects" });
+            res.status(401).json({ error: "Identifiants incorrects." });
         }
-    } catch (err) { res.status(500).json({ error: "Erreur serveur" }); }
+    } catch (err) {
+        res.status(500).json({ error: "Erreur serveur." });
+    }
 });
 
+// Changement d'avatar
 app.post('/api/user/update-avatar', async (req, res) => {
     try {
         const { userId, avatar } = req.body;
@@ -80,8 +90,10 @@ app.post('/api/user/update-avatar', async (req, res) => {
             data: { avatar }
         });
         res.json({ avatar: updated.avatar });
-    } catch (err) { res.status(500).json({ error: "Erreur mise à jour" }); }
+    } catch (err) {
+        res.status(500).json({ error: "Erreur mise à jour avatar." });
+    }
 });
 
 const PORT = process.env.PORT || 8080;
-server.listen(PORT, () => console.log(`🚀 Serveur prêt sur le port ${PORT}`));
+server.listen(PORT, () => console.log(`🚀 Serveur en ligne sur le port ${PORT}`));
