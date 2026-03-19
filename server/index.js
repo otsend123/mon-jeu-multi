@@ -140,10 +140,12 @@ io.on('connection', (socket) => {
         const lobby = lobbies.find(l => l.id === lobbyId);
         const user = connectedUsers.get(socket.id);
         if (lobby && user && lobby.creator === user.pseudo && lobby.status === 'playing') {
-            // 🔥 Nettoyage impératif du timer
-            if (lobby.gameState && lobby.gameState.timeoutId) {
-                clearTimeout(lobby.gameState.timeoutId);
+
+            // 🔥 On coupe le chrono en toute sécurité
+            if (lobby.selectedGame === 'adquiz') {
+                adQuizGame.stopAdQuizTimer(lobbyId);
             }
+
             lobby.status = 'waiting';
             lobby.gameState = null;
             io.to(lobby.id).emit('lobbyUpdated', lobby);

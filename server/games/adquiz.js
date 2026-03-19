@@ -1,3 +1,6 @@
+// On stocke les chronomètres ici, en sécurité, loin des joueurs !
+const timers = new Map();
+
 async function startAdQuizGame(io, lobbies, lobby, prisma) {
     try {
         if (!prisma.adQuestion) return io.to(lobby.id).emit('roomError', "Table AdQuestion introuvable.");
@@ -17,12 +20,14 @@ async function startAdQuizGame(io, lobbies, lobby, prisma) {
             answersThisRound: {},
             roundStatus: 'question',
             roundEndTime: Date.now() + 60000
+            // 🔥 On ne met PLUS le timeoutId ici !
         };
 
-        // 🔥 Sécurité : Nettoyage avant démarrage
-        if (lobby.gameState.timeoutId) clearTimeout(lobby.gameState.timeoutId);
+        // Nettoyage de sécurité
+        if (timers.has(lobby.id)) clearTimeout(timers.get(lobby.id));
 
-        lobby.gameState.timeoutId = setTimeout(() => { forceNext(io, lobbies, lobby); }, 60000);
+        // On stocke le chrono dans notre dictionnaire privé
+        timers.set(lobby.id, setTimeout(() => { forceNext(io, lobbies, lobby); }, 60000));
 
         io.to(lobby.id).emit('gameStarted', lobby);
         io.emit('updateLobbies', lobbies);
@@ -47,10 +52,10 @@ function checkRoundEnd(io, lobbies, lobby, force = false) {
     const targetCount = activePlayersCount > 0 ? activePlayersCount : 1;
 
     if (force || answeredCount >= targetCount) {
-        // 🔥 STOP le timer immédiatement pour éviter la boucle infinie
-        if (lobby.gameState.timeoutId) {
-            clearTimeout(lobby.gameState.timeoutId);
-            lobby.gameState.timeoutId = null;
+        // 🔥 On arrête le chrono proprement
+        if (timers.has(lobby.id)) {
+            clearTimeout(timers.get(lobby.id));
+            timers.delete(lobby.id);
         }
 
         lobby.gameState.roundStatus = 'result';
@@ -74,8 +79,8 @@ function checkRoundEnd(io, lobbies, lobby, force = false) {
                 lobby.gameState.roundStatus = 'question';
                 lobby.gameState.roundEndTime = Date.now() + 60000;
 
-                // Relance le timer pour la nouvelle question
-                lobby.gameState.timeoutId = setTimeout(() => { forceNext(io, lobbies, lobby); }, 60000);
+                // Relance le chrono pour la question suivante
+                timers.set(lobby.id, setTimeout(() => { forceNext(io, lobbies, lobby); }, 60000));
 
                 io.to(lobby.id).emit('nextQuestion', lobby);
             } else {
@@ -90,4 +95,12 @@ function checkRoundEnd(io, lobbies, lobby, force = false) {
 function forceNext(io, lobbies, lobby) { checkRoundEnd(io, lobbies, lobby, true); }
 function handleDisconnection(io, lobbies, lobby) { checkRoundEnd(io, lobbies, lobby); }
 
-module.exports = { startAdQuizGame, handleAnswer, handleDisconnection, forceNext };
+// Nouvelle fonction pour nettoyer le chrono si le chef arrête la partie brutalement
+function stopAdQuizTimer(lobbyId) {
+    if (timers.has(lobbyId)) {
+        clearTimeout(timers.get(lobbyId));
+        timers.delete(lobbyId);
+    }
+}
+
+module.exports = { startAdQuizGame, handleAnswer, handleDisconnection, forceNext, stopAdQuizTimer };
