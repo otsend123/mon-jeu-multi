@@ -9,10 +9,10 @@ const app = express();
 const server = http.createServer(app);
 const prisma = new PrismaClient();
 
-// Configuration Socket.IO
+// Configuration Socket.IO robuste
 const io = new Server(server, {
     cors: {
-        origin: "*", // À remplacer par ton URL frontend en production
+        origin: "*",
         methods: ["GET", "POST"]
     }
 });
@@ -20,56 +20,51 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
-// --- GESTION TEMPS RÉEL (SOCKET.IO) ---
-let connectedUsers = {};
+// --- GESTION TEMPS RÉEL ---
+let connectedUsers = new Map();
 
 io.on('connection', (socket) => {
-    // Un joueur rejoint le lobby
     socket.on('joinGame', (userData) => {
-        connectedUsers[socket.id] = {
+        connectedUsers.set(socket.id, {
             id: userData.id,
             pseudo: userData.pseudo,
             avatar: userData.avatar || '👤'
-        };
-        io.emit('updateUserList', Object.values(connectedUsers));
+        });
+        io.emit('updateUserList', Array.from(connectedUsers.values()));
     });
 
-    // Un joueur change d'avatar
     socket.on('changeAvatar', (newAvatar) => {
-        if (connectedUsers[socket.id]) {
-            connectedUsers[socket.id].avatar = newAvatar;
-            io.emit('updateUserList', Object.values(connectedUsers));
+        const user = connectedUsers.get(socket.id);
+        if (user) {
+            user.avatar = newAvatar;
+            io.emit('updateUserList', Array.from(connectedUsers.values()));
         }
     });
 
     socket.on('disconnect', () => {
-        delete connectedUsers[socket.id];
-        io.emit('updateUserList', Object.values(connectedUsers));
+        connectedUsers.delete(socket.id);
+        io.emit('updateUserList', Array.from(connectedUsers.values()));
     });
 });
 
 // --- ROUTES API ---
 
-// Inscription
 app.post('/register', async (req, res) => {
     try {
         const { email, pseudo, password } = req.body;
+        if (!email || !pseudo || !password) return res.status(400).json({ error: "Champs manquants" });
+
         const hashedPassword = await bcrypt.hash(password, 10);
         const newUser = await prisma.user.create({
-            data: {
-                email: email.toLowerCase(),
-                pseudo,
-                password: hashedPassword,
-                avatar: '🕹️'
-            }
+            data: { email: email.toLowerCase(), pseudo, password: hashedPassword, avatar: '🕹️' }
         });
         res.status(201).json({ user: { id: newUser.id, pseudo: newUser.pseudo, avatar: newUser.avatar } });
     } catch (error) {
-        res.status(500).json({ error: "Erreur lors de l'inscription" });
+        console.error("Erreur Inscription:", error);
+        res.status(500).json({ error: "Erreur DB : Vérifiez si l'email existe déjà" });
     }
 });
 
-// Connexion
 app.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -80,23 +75,22 @@ app.post('/login', async (req, res) => {
             res.status(401).json({ error: "Identifiants incorrects" });
         }
     } catch (error) {
-        res.status(500).json({ error: "Erreur de connexion" });
+        res.status(500).json({ error: "Erreur serveur login" });
     }
 });
 
-// Mise à jour Avatar
 app.post('/api/user/update-avatar', async (req, res) => {
     try {
         const { userId, avatar } = req.body;
         const updatedUser = await prisma.user.update({
             where: { id: parseInt(userId) },
-            data: { avatar: avatar }
+            data: { avatar }
         });
         res.status(200).json({ avatar: updatedUser.avatar });
     } catch (error) {
-        res.status(500).json({ error: "Erreur mise à jour avatar" });
+        res.status(500).json({ error: "Erreur mise à jour" });
     }
 });
 
 const PORT = process.env.PORT || 8080;
-server.listen(PORT, () => console.log(`✅ Serveur sur port ${PORT}`));
+server.listen(PORT, () => console.log(`🚀 Serveur actif sur le port ${PORT}`));

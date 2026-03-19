@@ -2,21 +2,19 @@ import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
 import './App.css';
 
-// ⚠️ REMPLACE PAR TON URL RAILWAY RÉELLE
-const SERVER_URL = "https://scintillating-inspiration-production.up.railway.app";
-const socket = io(SERVER_URL);
-const AVATAR_LIST = ['🕹️', '👽', '🤖', '👻', '👾', '👨‍🚀', '🐱', '🐲', '🐼', '🦊'];
+// URL EXACT DE TON BACKEND RAILWAY
+const API_URL = "https://scintillating-inspiration-production.up.railway.app";
+const socket = io(API_URL);
+const AVATARS = ['🕹️', '👽', '🤖', '👻', '👾', '👨‍🚀', '🐱', '🐲', '🐼', '🦊'];
 
 function App() {
-    // 1. ÉTATS
     const [user, setUser] = useState(JSON.parse(localStorage.getItem('user')));
     const [players, setPlayers] = useState([]);
     const [showModal, setShowModal] = useState(false);
-    const [formData, setFormData] = useState({ email: '', pseudo: '', password: '' });
-    const [isLogin, setIsLogin] = useState(true); // Basculer entre Connexion et Inscription
+    const [isLogin, setIsLogin] = useState(true);
     const [error, setError] = useState('');
+    const [form, setForm] = useState({ email: '', pseudo: '', password: '' });
 
-    // 2. SYNCHRONISATION TEMPS RÉEL
     useEffect(() => {
         if (user) {
             socket.emit('joinGame', user);
@@ -25,130 +23,100 @@ function App() {
         return () => socket.off('updateUserList');
     }, [user]);
 
-    // 3. ACTIONS (CONNEXION / INSCRIPTION)
     const handleAuth = async (e) => {
         e.preventDefault();
         setError('');
-        const endpoint = isLogin ? '/login' : '/register';
-
+        const path = isLogin ? '/login' : '/register';
         try {
-            const response = await fetch(`${SERVER_URL}${endpoint}`, {
+            const res = await fetch(`${API_URL}${path}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
+                body: JSON.stringify(form)
             });
-            const data = await response.json();
-
-            if (response.ok) {
+            const data = await res.json();
+            if (res.ok) {
                 localStorage.setItem('user', JSON.stringify(data.user));
                 setUser(data.user);
             } else {
-                setError(data.error || 'Une erreur est survenue');
+                setError(data.error);
             }
         } catch (err) {
-            setError('Impossible de contacter le serveur');
+            setError("Serveur injoignable. Vérifie que le backend tourne sur Railway.");
         }
     };
 
-    const handleAvatarSelect = async (emoji) => {
-        try {
-            const response = await fetch(`${SERVER_URL}/api/user/update-avatar`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ userId: user.id, avatar: emoji })
-            });
-            if (response.ok) {
-                const newUser = { ...user, avatar: emoji };
-                setUser(newUser);
-                localStorage.setItem('user', JSON.stringify(newUser));
-                socket.emit('changeAvatar', emoji);
-                setShowModal(false);
-            }
-        } catch (error) { console.error(error); }
+    const updateAvatar = async (emoji) => {
+        const res = await fetch(`${API_URL}/api/user/update-avatar`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: user.id, avatar: emoji })
+        });
+        if (res.ok) {
+            const updated = { ...user, avatar: emoji };
+            setUser(updated);
+            localStorage.setItem('user', JSON.stringify(updated));
+            socket.emit('changeAvatar', emoji);
+            setShowModal(false);
+        }
     };
 
-    const logout = () => {
-        localStorage.removeItem('user');
-        setUser(null);
-        window.location.reload();
-    };
-
-    // 4. RENDU : SI PAS CONNECTÉ (Affiche le Formulaire)
+    // --- RENDU AUTHENTIFICATION ---
     if (!user) {
         return (
             <div className="auth-container">
                 <h1 className="title-cyber">{isLogin ? 'CONNEXION' : 'INSCRIPTION'}</h1>
                 <form onSubmit={handleAuth}>
                     {!isLogin && (
-                        <input
-                            type="text"
-                            placeholder="Pseudo"
-                            onChange={(e) => setFormData({...formData, pseudo: e.target.value})}
-                            required
-                        />
+                        <input type="text" placeholder="Pseudo" required
+                               onChange={e => setForm({...form, pseudo: e.target.value})} />
                     )}
-                    <input
-                        type="email"
-                        placeholder="Email"
-                        onChange={(e) => setFormData({...formData, email: e.target.value})}
-                        required
-                    />
-                    <input
-                        type="password"
-                        placeholder="Mot de passe"
-                        onChange={(e) => setFormData({...formData, password: e.target.value})}
-                        required
-                    />
-                    <button type="submit" className="btn-cyber">
-                        {isLogin ? 'Se connecter' : "S'inscrire"}
-                    </button>
+                    <input type="email" placeholder="Email" required
+                           onChange={e => setForm({...form, email: e.target.value})} />
+                    <input type="password" placeholder="Mot de passe" required
+                           onChange={e => setForm({...form, password: e.target.value})} />
+                    <button type="submit" className="btn-cyber">{isLogin ? 'Entrer' : 'Créer compte'}</button>
                 </form>
                 {error && <p className="error-msg">{error}</p>}
-                <p onClick={() => setIsLogin(!isLogin)} style={{cursor: 'pointer', marginTop: '15px'}}>
-                    {isLogin ? "Pas de compte ? S'inscrire" : "Déjà un compte ? Se connecter"}
+                <p className="toggle-auth" onClick={() => setIsLogin(!isLogin)}>
+                    {isLogin ? "Pas de compte ? S'inscrire" : "Déjà inscrit ? Connexion"}
                 </p>
             </div>
         );
     }
 
-    // 5. RENDU : SI CONNECTÉ (Affiche le Lobby)
+    // --- RENDU LOBBY ---
     return (
-        <div>
+        <div className="App">
             <header className="header-cyber">
-                <h1 className="title-cyber">CYBER LOBBY</h1>
-                <div style={{display: 'flex', alignItems: 'center', gap: '20px'}}>
-                    <div className="user-profile-btn" onClick={() => setShowModal(true)}>
-                        <div className="header-avatar">{user.avatar}</div>
-                        <span>{user.pseudo}</span>
-                    </div>
-                    <button className="btn-disconnect" onClick={logout}>Déconnexion</button>
+                <h1 className="title-cyber">LOBBY</h1>
+                <div className="user-profile-btn" onClick={() => setShowModal(true)}>
+                    <div className="header-avatar">{user.avatar}</div>
+                    <span>{user.pseudo}</span>
                 </div>
             </header>
 
             <main className="lobby-content">
-                <h2 className="online-title">Joueurs en ligne</h2>
+                <h2 className="online-title">En ligne ({players.length})</h2>
                 <div className="player-grid">
                     {players.map(p => (
                         <div key={p.id} className="player-card">
-                            <span style={{fontSize: '2rem'}}>{p.avatar}</span>
-                            <span>{p.pseudo}</span>
+                            <span className="player-avatar">{p.avatar}</span>
+                            <span className="player-pseudo">{p.pseudo}</span>
                         </div>
                     ))}
                 </div>
             </main>
 
             {showModal && (
-                <div className="modal-overlay">
-                    <div className="avatar-modal">
-                        <h2 className="modal-title">Mon Profil</h2>
+                <div className="modal-overlay" onClick={() => setShowModal(false)}>
+                    <div className="avatar-modal" onClick={e => e.stopPropagation()}>
+                        <h2 className="modal-title">Choisir Avatar</h2>
                         <div className="avatar-selection-grid">
-                            {AVATAR_LIST.map(emoji => (
-                                <div key={emoji} className="avatar-opt" onClick={() => handleAvatarSelect(emoji)}>
-                                    {emoji}
-                                </div>
+                            {AVATARS.map(emoji => (
+                                <div key={emoji} className="avatar-opt" onClick={() => updateAvatar(emoji)}>{emoji}</div>
                             ))}
                         </div>
-                        <button className="btn-close-modal" onClick={() => setShowModal(false)}>Annuler</button>
+                        <button className="btn-cyber" onClick={() => setShowModal(false)}>Fermer</button>
                     </div>
                 </div>
             )}
