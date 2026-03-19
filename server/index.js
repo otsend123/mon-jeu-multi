@@ -9,7 +9,6 @@ const app = express();
 const server = http.createServer(app);
 const prisma = new PrismaClient();
 
-// Configuration Socket.io
 const io = new Server(server, {
     cors: { origin: "*", methods: ["GET", "POST"] }
 });
@@ -17,24 +16,46 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
-// --- ROUTE DE VÉRIFICATION (TRÈS IMPORTANT POUR RAILWAY) ---
 app.get('/', (req, res) => {
-    res.status(200).send("✅ Le backend CyberLobby est en ligne et fonctionne parfaitement !");
+    res.status(200).send("✅ Le backend CyberLobby est en ligne et gère les salons !");
 });
 
 // --- LOGIQUE TEMPS RÉEL (SOCKET.IO) ---
 let connectedUsers = new Map();
+let lobbies = []; // Liste des salons actifs
 
 io.on('connection', (socket) => {
+
+    // Un joueur se connecte au serveur global
     socket.on('joinGame', (userData) => {
         connectedUsers.set(socket.id, {
             id: userData.id,
             pseudo: userData.pseudo,
             avatar: userData.avatar || '👤'
         });
+        // Envoie la liste des joueurs à tout le monde
         io.emit('updateUserList', Array.from(connectedUsers.values()));
+        // Envoie la liste des salons actuels au nouveau venu
+        socket.emit('updateLobbies', lobbies);
     });
 
+    // Création d'un nouveau salon
+    socket.on('createLobby', (lobbyName) => {
+        const user = connectedUsers.get(socket.id);
+        if (user && lobbyName.trim() !== '') {
+            const newLobby = {
+                id: Date.now().toString(),
+                name: lobbyName,
+                creator: user.pseudo,
+                players: [user] // Le créateur rejoint automatiquement son salon
+            };
+            lobbies.push(newLobby);
+            // On met à jour la liste des salons pour tout le monde
+            io.emit('updateLobbies', lobbies);
+        }
+    });
+
+    // Changement d'avatar
     socket.on('changeAvatar', (newAvatar) => {
         const user = connectedUsers.get(socket.id);
         if (user) {
@@ -43,35 +64,29 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Déconnexion
     socket.on('disconnect', () => {
         connectedUsers.delete(socket.id);
         io.emit('updateUserList', Array.from(connectedUsers.values()));
+        // (Optionnel pour plus tard : retirer le joueur des salons s'il s'y trouvait)
     });
 });
 
 // --- ROUTES API ---
 
-// Inscription
 app.post('/register', async (req, res) => {
     try {
         const { email, pseudo, password } = req.body;
         const hashedPassword = await bcrypt.hash(password, 10);
         const newUser = await prisma.user.create({
-            data: {
-                email: email.toLowerCase(),
-                pseudo,
-                password: hashedPassword,
-                avatar: '🕹️'
-            }
+            data: { email: email.toLowerCase(), pseudo, password: hashedPassword, avatar: '🕹️' }
         });
         res.status(201).json({ user: { id: newUser.id, pseudo: newUser.pseudo, avatar: newUser.avatar } });
     } catch (err) {
-        console.error("Erreur Inscription:", err);
-        res.status(500).json({ error: "Erreur : Email ou Pseudo déjà pris, ou base non synchronisée." });
+        res.status(500).json({ error: "Erreur : Email ou Pseudo déjà pris." });
     }
 });
 
-// Connexion
 app.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -82,12 +97,10 @@ app.post('/login', async (req, res) => {
             res.status(401).json({ error: "Identifiants incorrects." });
         }
     } catch (err) {
-        console.error("Erreur Connexion:", err);
         res.status(500).json({ error: "Erreur interne du serveur." });
     }
 });
 
-// Changement d'avatar
 app.post('/api/user/update-avatar', async (req, res) => {
     try {
         const { userId, avatar } = req.body;
@@ -97,13 +110,9 @@ app.post('/api/user/update-avatar', async (req, res) => {
         });
         res.json({ avatar: updated.avatar });
     } catch (err) {
-        console.error("Erreur Avatar:", err);
         res.status(500).json({ error: "Erreur de mise à jour de l'avatar." });
     }
 });
 
 const PORT = process.env.PORT || 8080;
-// L'ajout de '0.0.0.0' garantit que Railway peut router le trafic vers ton app
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Serveur en ligne sur le port ${PORT}`);
-});
+server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Serveur en ligne sur le port ${PORT}`));
