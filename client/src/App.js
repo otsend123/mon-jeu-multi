@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
 import './App.css';
 
-// ⚠️ MODIFIE CETTE URL SI BESOIN
+// ⚠️ URL DE TON BACKEND RAILWAY
 const API_URL = "https://mon-jeu-multi-production-ed0c.up.railway.app";
 const socket = io(API_URL, { transports: ['websocket', 'polling'] });
 const AVATARS = ['🕹️', '👽', '🤖', '👻', '👾', '👨‍🚀', '🐱', '🐲', '🐼', '🦊'];
@@ -16,12 +16,10 @@ function App() {
     const [error, setError] = useState('');
     const [form, setForm] = useState({ email: '', pseudo: '', password: '' });
 
-    // États des Lobbies
+    // Lobbies & Invitations
     const [lobbies, setLobbies] = useState([]);
     const [newLobbyName, setNewLobbyName] = useState('');
-    const [currentLobby, setCurrentLobby] = useState(null); // NULL = Accueil, OBJET = Dans un salon
-
-    // Invitations
+    const [currentLobby, setCurrentLobby] = useState(null);
     const [invite, setInvite] = useState(null);
 
     useEffect(() => {
@@ -31,15 +29,18 @@ function App() {
             socket.on('updateUserList', (list) => setPlayers(list));
             socket.on('updateLobbies', (lobbyList) => setLobbies(lobbyList));
 
-            // Événements de Salon
             socket.on('lobbyJoined', (lobby) => setCurrentLobby(lobby));
             socket.on('lobbyUpdated', (lobby) => setCurrentLobby(lobby));
             socket.on('lobbyLeft', () => setCurrentLobby(null));
             socket.on('roomError', (msg) => alert(msg));
 
-            // Réception d'une invitation
-            socket.on('receiveInvite', (data) => {
-                setInvite(data);
+            socket.on('receiveInvite', (data) => setInvite(data));
+
+            // --- NOUVEAU : DÉCONNEXION FORCÉE SI DOUBLE ONGLET ---
+            socket.on('forceDisconnect', (msg) => {
+                alert(msg);
+                localStorage.removeItem('user');
+                window.location.reload();
             });
         }
 
@@ -51,6 +52,7 @@ function App() {
             socket.off('lobbyLeft');
             socket.off('roomError');
             socket.off('receiveInvite');
+            socket.off('forceDisconnect');
         };
     }, [user]);
 
@@ -103,7 +105,6 @@ function App() {
         }
     };
 
-    // --- RENDU AUTHENTIFICATION ---
     if (!user) {
         return (
             <div className="auth-container">
@@ -122,20 +123,16 @@ function App() {
         );
     }
 
-    // --- VUE 2 : DANS UNE SALLE D'ATTENTE (ROOM) ---
+    // --- VUE : SALLE D'ATTENTE (ROOM) ---
     if (currentLobby) {
-        // On génère 8 slots fixes
         const slots = [...Array(8)].map((_, index) => currentLobby.players[index] || null);
-
         return (
             <div className="App">
                 <header className="header-cyber">
                     <h1 className="title-cyber">{currentLobby.name}</h1>
                     <button className="btn-disconnect" onClick={() => socket.emit('leaveLobby')}>🚪 Quitter le salon</button>
                 </header>
-
                 <main className="main-dashboard dashboard-top">
-                    {/* GAUCHE : LES 8 SLOTS DU SALON */}
                     <section className="panel-section room-section">
                         <h2 className="panel-title">Équipe ({currentLobby.players.length}/8)</h2>
                         <div className="slots-grid">
@@ -157,15 +154,12 @@ function App() {
                             <button className="btn-cyber" style={{width: '200px'}}>Lancer la partie</button>
                         </div>
                     </section>
-
-                    {/* DROITE : INVITER DES JOUEURS */}
                     <section className="panel-section players-section">
                         <h2 className="panel-title">Inviter des joueurs</h2>
                         <div className="table-container">
                             <table className="players-table">
                                 <tbody>
                                 {players.filter(p => p.pseudo !== user.pseudo).map(p => {
-                                    // Vérifier si le joueur est déjà dans le salon
                                     const isInLobby = currentLobby.players.some(lobbyP => lobbyP.pseudo === p.pseudo);
                                     return (
                                         <tr key={p.socketId}>
@@ -190,7 +184,7 @@ function App() {
         );
     }
 
-    // --- VUE 1 : ACCUEIL MULTIJOUEUR ---
+    // --- VUE : ACCUEIL MULTIJOUEUR ---
     return (
         <div className="App">
             <header className="header-cyber">
@@ -202,7 +196,6 @@ function App() {
                 <button className="btn-disconnect" onClick={() => {localStorage.clear(); window.location.reload();}}>Déconnexion</button>
             </header>
 
-            {/* POPUP INVITATION (Flottant) */}
             {invite && (
                 <div className="invite-toast">
                     <p><strong>{invite.senderName}</strong> vous invite dans : <em>{invite.lobbyName}</em></p>
@@ -221,7 +214,6 @@ function App() {
                             <input type="text" placeholder="Nom du salon..." value={newLobbyName} onChange={(e) => setNewLobbyName(e.target.value)} />
                             <button type="submit" className="btn-cyber btn-small">Créer</button>
                         </form>
-
                         <div className="lobbies-list">
                             {lobbies.length === 0 ? (
                                 <p className="empty-text">Aucun salon actif. Créez-en un !</p>
@@ -270,7 +262,6 @@ function App() {
                 </div>
             </main>
 
-            {/* MODALE AVATAR */}
             {showModal && (
                 <div className="modal-overlay" onClick={() => setShowModal(false)}>
                     <div className="avatar-modal" onClick={e => e.stopPropagation()}>
