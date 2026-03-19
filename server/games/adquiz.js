@@ -1,17 +1,37 @@
-// On stocke les chronomètres ici, en sécurité, loin des joueurs !
+const fs = require('fs');
+const path = require('path');
+
+// Les chronomètres sont stockés en sécurité
 const timers = new Map();
+
+// Fonction pour lire le JSON en direct
+function getAdQuestions() {
+    try {
+        const filePath = path.join(__dirname, '../data/ads.json');
+        const rawData = fs.readFileSync(filePath, 'utf8');
+        return JSON.parse(rawData);
+    } catch (error) {
+        console.error("Erreur de lecture du fichier ads.json :", error);
+        return [];
+    }
+}
 
 async function startAdQuizGame(io, lobbies, lobby, prisma) {
     try {
-        if (!prisma.adQuestion) return io.to(lobby.id).emit('roomError', "Table AdQuestion introuvable.");
+        // On récupère les questions directement depuis le JSON
+        const allQuestions = getAdQuestions();
 
-        const allQuestions = await prisma.adQuestion.findMany();
-        if (allQuestions.length === 0) return io.to(lobby.id).emit('roomError', "Aucune vidéo en base. Lancez 'node seed-ads.js'.");
+        if (allQuestions.length === 0) {
+            return io.to(lobby.id).emit('roomError', "Aucune vidéo trouvée dans le fichier ads.json !");
+        }
 
+        // On mélange et on en garde 10 au maximum (ou moins si ton JSON est plus petit)
         const selectedQuestions = allQuestions.sort(() => 0.5 - Math.random()).slice(0, 10);
 
         if (!lobby.scores) lobby.scores = {};
-        lobby.players.forEach(p => { if (lobby.scores[p.pseudo] === undefined) lobby.scores[p.pseudo] = 0; });
+        lobby.players.forEach(p => {
+            if (lobby.scores[p.pseudo] === undefined) lobby.scores[p.pseudo] = 0;
+        });
 
         lobby.status = 'playing';
         lobby.gameState = {
@@ -19,19 +39,21 @@ async function startAdQuizGame(io, lobbies, lobby, prisma) {
             currentQuestionIndex: 0,
             answersThisRound: {},
             roundStatus: 'question',
-            roundEndTime: Date.now() + 60000
-            // 🔥 On ne met PLUS le timeoutId ici !
+            // 🔥 TEMPS MODIFIÉ : 300 000 ms = 5 minutes
+            roundEndTime: Date.now() + 300000
         };
 
-        // Nettoyage de sécurité
+        // Nettoyage de sécurité avant de commencer
         if (timers.has(lobby.id)) clearTimeout(timers.get(lobby.id));
 
-        // On stocke le chrono dans notre dictionnaire privé
-        timers.set(lobby.id, setTimeout(() => { forceNext(io, lobbies, lobby); }, 60000));
+        // 🔥 On lance le chrono du premier tour sur 5 minutes
+        timers.set(lobby.id, setTimeout(() => { forceNext(io, lobbies, lobby); }, 300000));
 
         io.to(lobby.id).emit('gameStarted', lobby);
         io.emit('updateLobbies', lobbies);
-    } catch (error) { io.to(lobby.id).emit('roomError', "Erreur technique : " + error.message); }
+    } catch (error) {
+        io.to(lobby.id).emit('roomError', "Erreur : " + error.message);
+    }
 }
 
 function handleAnswer(io, lobbies, lobby, socketId, answer) {
@@ -52,7 +74,8 @@ function checkRoundEnd(io, lobbies, lobby, force = false) {
     const targetCount = activePlayersCount > 0 ? activePlayersCount : 1;
 
     if (force || answeredCount >= targetCount) {
-        // 🔥 On arrête le chrono proprement
+
+        // On arrête le chrono proprement
         if (timers.has(lobby.id)) {
             clearTimeout(timers.get(lobby.id));
             timers.delete(lobby.id);
@@ -77,10 +100,11 @@ function checkRoundEnd(io, lobbies, lobby, force = false) {
                 lobby.gameState.currentQuestionIndex++;
                 lobby.gameState.answersThisRound = {};
                 lobby.gameState.roundStatus = 'question';
-                lobby.gameState.roundEndTime = Date.now() + 60000;
+                // 🔥 TEMPS MODIFIÉ : 5 minutes
+                lobby.gameState.roundEndTime = Date.now() + 300000;
 
-                // Relance le chrono pour la question suivante
-                timers.set(lobby.id, setTimeout(() => { forceNext(io, lobbies, lobby); }, 60000));
+                // Relance le chrono de 5 minutes pour la question suivante
+                timers.set(lobby.id, setTimeout(() => { forceNext(io, lobbies, lobby); }, 300000));
 
                 io.to(lobby.id).emit('nextQuestion', lobby);
             } else {
@@ -92,10 +116,14 @@ function checkRoundEnd(io, lobbies, lobby, force = false) {
     }
 }
 
-function forceNext(io, lobbies, lobby) { checkRoundEnd(io, lobbies, lobby, true); }
-function handleDisconnection(io, lobbies, lobby) { checkRoundEnd(io, lobbies, lobby); }
+function forceNext(io, lobbies, lobby) {
+    checkRoundEnd(io, lobbies, lobby, true);
+}
 
-// Nouvelle fonction pour nettoyer le chrono si le chef arrête la partie brutalement
+function handleDisconnection(io, lobbies, lobby) {
+    checkRoundEnd(io, lobbies, lobby);
+}
+
 function stopAdQuizTimer(lobbyId) {
     if (timers.has(lobbyId)) {
         clearTimeout(timers.get(lobbyId));

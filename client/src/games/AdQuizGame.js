@@ -2,20 +2,17 @@ import React, { useState, useEffect, useRef } from 'react';
 
 function AdQuizGame({ currentLobby, socket, user }) {
     const [hasAnswered, setHasAnswered] = useState(false);
-    const [replaysLeft, setReplaysLeft] = useState(3);
     const [isVideoFinished, setIsVideoFinished] = useState(false);
-    const [timeLeft, setTimeLeft] = useState(60);
+    const [timeLeft, setTimeLeft] = useState(300); // Initialisé à 300 secondes (5 min)
 
     const videoRef = useRef(null);
     const gs = currentLobby?.gameState;
 
     useEffect(() => {
         setHasAnswered(false);
-        setReplaysLeft(3);
         setIsVideoFinished(false);
         if (videoRef.current) {
             videoRef.current.load();
-            // Si le navigateur bloque, le joueur utilisera les contrôles pour lancer
             videoRef.current.play().catch(e => console.log("Autoplay bloqué par le navigateur :", e));
         }
     }, [gs?.currentQuestionIndex]);
@@ -44,13 +41,11 @@ function AdQuizGame({ currentLobby, socket, user }) {
         }
     };
 
-    const handleReplay = () => {
-        if (replaysLeft > 0 && videoRef.current) {
-            setReplaysLeft(prev => prev - 1);
-            videoRef.current.currentTime = 0;
-            videoRef.current.play();
-            setIsVideoFinished(false);
-        }
+    // Formate les secondes en minutes:secondes (ex: 300 => "5:00")
+    const formatTime = (seconds) => {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m}:${s < 10 ? '0' : ''}${s}`;
     };
 
     return (
@@ -60,12 +55,12 @@ function AdQuizGame({ currentLobby, socket, user }) {
                     <>
                         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px'}}>
                             <h2>Quelle est cette pub ?</h2>
-                            <div style={{fontSize: '1.5rem', fontWeight: 'bold', color: timeLeft <= 10 ? '#ff2e63' : '#00d4ff'}}>
-                                ⏱️ {timeLeft}s
+                            <div style={{fontSize: '1.5rem', fontWeight: 'bold', color: timeLeft <= 30 ? '#ff2e63' : '#00d4ff'}}>
+                                ⏱️ {formatTime(timeLeft)}
                             </div>
                         </div>
 
-                        {/* 🔥 L'attribut 'controls' est la clé ici ! */}
+                        {/* La vidéo a toujours 'controls' pour être pilotée librement */}
                         <video
                             ref={videoRef}
                             src={`/${currentQ.videoUrl}`}
@@ -84,12 +79,12 @@ function AdQuizGame({ currentLobby, socket, user }) {
                                 ))}
                             </div>
                         )}
-                        <div style={{marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-                            <button className="btn-cyber btn-small" onClick={handleReplay} disabled={replaysLeft === 0 || hasAnswered}>
-                                🔄 Revoir ({replaysLeft}/3)
-                            </button>
+
+                        <div style={{marginTop: '20px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center'}}>
                             {isHost && hasAnswered && (
-                                <button className="btn-cyber btn-small" style={{background: '#ff2e63', border: 'none'}} onClick={() => socket.emit('forceNextRound', currentLobby.id)}>Forcer ⚡</button>
+                                <button className="btn-cyber btn-small" style={{background: '#ff2e63', border: 'none'}} onClick={() => socket.emit('forceNextRound', currentLobby.id)}>
+                                    Forcer ⚡
+                                </button>
                             )}
                         </div>
                     </>
