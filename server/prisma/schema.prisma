@@ -12,8 +12,7 @@ model User {
   email     String   @unique
   pseudo    String   @unique
   password  String
-  birthDate DateTime
-  avatar    String
-  score     Int      @default(0)
+  birthDate DateTime? // <-- LE POINT D'INTERROGATION EST CRUCIAL ICI
+  avatar    String?  @default("👤")
   createdAt DateTime @default(now())
 }
