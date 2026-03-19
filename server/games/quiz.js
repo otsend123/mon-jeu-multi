@@ -3,9 +3,10 @@ async function startQuizGame(io, lobbies, lobby, prisma) {
         const allQuestions = await prisma.question.findMany();
         if (allQuestions.length === 0) return io.to(lobby.id).emit('roomError', "Aucune question en base !");
 
-        const selectedQuestions = allQuestions.sort(() => 0.5 - Math.random()).slice(0, 5);
+        // 🔥 MODIFICATION ICI : On coupe la liste à 20 questions au lieu de 5
+        const selectedQuestions = allQuestions.sort(() => 0.5 - Math.random()).slice(0, 20);
 
-        // 🔥 NOUVEAU : On garde le score global du salon (Persistance)
+        // On garde le score global du salon (Persistance)
         if (!lobby.scores) lobby.scores = {};
         lobby.players.forEach(p => {
             // On initialise à 0 seulement si le joueur n'a jamais joué dans ce salon
@@ -46,7 +47,6 @@ function checkRoundEnd(io, lobbies, lobby, force = false) {
         lobby.gameState.roundStatus = 'result';
         const currentQ = lobby.gameState.questions[lobby.gameState.currentQuestionIndex];
 
-        // 🔥 NOUVEAU : Attribution des points dans le score global (lobby.scores)
         for (const [sId, ans] of Object.entries(lobby.gameState.answersThisRound)) {
             if (ans === currentQ.correct) {
                 const player = lobby.players.find(p => p.socketId === sId);
@@ -57,6 +57,7 @@ function checkRoundEnd(io, lobbies, lobby, force = false) {
         io.to(lobby.id).emit('roundResult', lobby);
 
         setTimeout(() => {
+            // La logique gère automatiquement la fin du quiz une fois les 20 questions passées
             if (lobby.gameState.currentQuestionIndex < lobby.gameState.questions.length - 1) {
                 lobby.gameState.currentQuestionIndex++;
                 lobby.gameState.answersThisRound = {};
@@ -67,7 +68,7 @@ function checkRoundEnd(io, lobbies, lobby, force = false) {
                 io.to(lobby.id).emit('gameOver', lobby);
                 io.emit('updateLobbies', lobbies);
             }
-        }, 5000);
+        }, 5000); // 5 secondes pour voir le résultat avant la question suivante
     }
 }
 
