@@ -9,7 +9,7 @@ const app = express();
 const server = http.createServer(app);
 const prisma = new PrismaClient();
 
-// Configuration Socket.io (Autorise tout pour le test)
+// Configuration Socket.io
 const io = new Server(server, {
     cors: { origin: "*", methods: ["GET", "POST"] }
 });
@@ -17,7 +17,12 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
-// --- LOGIQUE TEMPS RÉEL ---
+// --- ROUTE DE VÉRIFICATION (TRÈS IMPORTANT POUR RAILWAY) ---
+app.get('/', (req, res) => {
+    res.status(200).send("✅ Le backend CyberLobby est en ligne et fonctionne parfaitement !");
+});
+
+// --- LOGIQUE TEMPS RÉEL (SOCKET.IO) ---
 let connectedUsers = new Map();
 
 io.on('connection', (socket) => {
@@ -61,8 +66,8 @@ app.post('/register', async (req, res) => {
         });
         res.status(201).json({ user: { id: newUser.id, pseudo: newUser.pseudo, avatar: newUser.avatar } });
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Erreur : Email déjà pris ou base non prête." });
+        console.error("Erreur Inscription:", err);
+        res.status(500).json({ error: "Erreur : Email ou Pseudo déjà pris, ou base non synchronisée." });
     }
 });
 
@@ -77,7 +82,8 @@ app.post('/login', async (req, res) => {
             res.status(401).json({ error: "Identifiants incorrects." });
         }
     } catch (err) {
-        res.status(500).json({ error: "Erreur serveur." });
+        console.error("Erreur Connexion:", err);
+        res.status(500).json({ error: "Erreur interne du serveur." });
     }
 });
 
@@ -91,9 +97,13 @@ app.post('/api/user/update-avatar', async (req, res) => {
         });
         res.json({ avatar: updated.avatar });
     } catch (err) {
-        res.status(500).json({ error: "Erreur mise à jour avatar." });
+        console.error("Erreur Avatar:", err);
+        res.status(500).json({ error: "Erreur de mise à jour de l'avatar." });
     }
 });
 
 const PORT = process.env.PORT || 8080;
-server.listen(PORT, () => console.log(`🚀 Serveur en ligne sur le port ${PORT}`));
+// L'ajout de '0.0.0.0' garantit que Railway peut router le trafic vers ton app
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Serveur en ligne sur le port ${PORT}`);
+});
