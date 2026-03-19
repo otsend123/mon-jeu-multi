@@ -16,6 +16,9 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
+// Message de bienvenue pour éviter le "Cannot GET /"
+app.get('/', (req, res) => res.send("🚀 Serveur de jeu opérationnel !"));
+
 let onlineUsers = [];
 
 io.on('connection', (socket) => {
@@ -39,9 +42,7 @@ app.post('/register', async (req, res) => {
             data: { email, pseudo, password: hashedPassword, birthDate: new Date(birthDate), avatar: avatar || '👤' }
         });
         res.status(201).json({ user: { pseudo: user.pseudo, avatar: user.avatar } });
-    } catch (e) {
-        res.status(400).json({ error: "Email ou pseudo déjà utilisé" });
-    }
+    } catch (e) { res.status(400).json({ error: "Email ou Pseudo déjà pris" }); }
 });
 
 app.post('/login', async (req, res) => {
@@ -49,12 +50,8 @@ app.post('/login', async (req, res) => {
     const user = await prisma.user.findUnique({ where: { email } });
     if (user && await bcrypt.compare(password, user.password)) {
         res.json({ user: { pseudo: user.pseudo, avatar: user.avatar } });
-    } else {
-        res.status(401).json({ error: "Identifiants incorrects" });
-    }
+    } else { res.status(401).json({ error: "Identifiants incorrects" }); }
 });
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Serveur actif sur le port ${PORT}`);
-});
+server.listen(PORT, '0.0.0.0', () => console.log(`Serveur actif sur le port ${PORT}`));

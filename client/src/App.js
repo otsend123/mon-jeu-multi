@@ -37,47 +37,38 @@ function App() {
 
     return (
         <div className="App">
-            <header className="header">
+            <header className="header" style={{display:'flex', justifyContent:'space-between', padding:'20px', background:'#222', color:'white'}}>
                 <h1>MON JEU MULTI</h1>
                 {user ? (
-                    <div className="profile">
-                        <span>{user.avatar} {user.pseudo}</span>
-                        <button className="logout-btn" onClick={() => window.location.reload()}>Déconnexion</button>
-                    </div>
+                    <div><span>{user.avatar} {user.pseudo}</span> <button onClick={() => window.location.reload()}>Déconnexion</button></div>
                 ) : (
-                    <button className="auth-btn" onClick={() => setShowModal(true)}>Mon Compte</button>
+                    <button onClick={() => setShowModal(true)}>Mon Compte</button>
                 )}
             </header>
 
-            <main className="hero">
-                {user ? (
-                    <div className="lobby-area">
-                        <h2>Lobby en direct ({players.length} joueurs)</h2>
-                        <div className="players-list">
-                            {players.map((p, i) => <div key={i} className="player-tag">{p.avatar} {p.pseudo}</div>)}
-                        </div>
-                        <button className="play-btn">LANCER LA PARTIE</button>
-                    </div>
+            <main style={{textAlign:'center', marginTop:'50px'}}>
+                {!user ? (
+                    <h2>Connectez-vous pour rejoindre le Lobby !</h2>
                 ) : (
-                    <div className="welcome">
-                        <h2>Bienvenue dans l'arène</h2>
-                        <p>Connectez-vous pour rejoindre les autres joueurs.</p>
+                    <div className="lobby">
+                        <h3>Joueurs en ligne :</h3>
+                        {players.map((p, i) => <div key={i}>{p.avatar} {p.pseudo}</div>)}
                     </div>
                 )}
             </main>
 
             {showModal && (
-                <div className="modal-overlay">
-                    <div className="modal-content">
+                <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.8)', display:'flex', justifyContent:'center', alignItems:'center'}}>
+                    <div style={{background:'white', padding:'30px', borderRadius:'10px', color:'black'}}>
                         <h3>{isLoginMode ? "Connexion" : "Inscription"}</h3>
-                        <form onSubmit={handleAuth} className="auth-form">
+                        <form onSubmit={handleAuth} style={{display:'flex', flexDirection:'column', gap:'10px'}}>
                             {!isLoginMode && <input placeholder="Pseudo" onChange={e => setFormData({...formData, pseudo: e.target.value})} required />}
                             <input type="email" placeholder="Email" onChange={e => setFormData({...formData, email: e.target.value})} required />
                             <input type="password" placeholder="Mot de passe" onChange={e => setFormData({...formData, password: e.target.value})} required />
-                            <button type="submit" className="submit-btn">{isLoginMode ? "Se connecter" : "S'inscrire"}</button>
+                            <button type="submit">{isLoginMode ? "Se connecter" : "S'inscrire"}</button>
                         </form>
-                        <p onClick={() => setIsLoginMode(!isLoginMode)} className="switch-text">
-                            {isLoginMode ? "Créer un compte" : "Déjà inscrit ? Se connecter"}
+                        <p style={{cursor:'pointer', color:'blue', marginTop:'10px'}} onClick={() => setIsLoginMode(!isLoginMode)}>
+                            {isLoginMode ? "Créer un compte" : "Déjà un compte ?"}
                         </p>
                     </div>
                 </div>
