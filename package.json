@@ -2,8 +2,8 @@
   "name": "mon-jeu-multi-root",
   "version": "1.0.0",
   "scripts": {
-    "start": "node server/index.js",
-    "postinstall": "npm install --prefix server && npm install --prefix client && npx prisma generate --schema=server/prisma/schema.prisma"
+    "start": "prisma generate --schema=server/prisma/schema.prisma && node server/index.js",
+    "postinstall": "npm install --prefix server && npm install --prefix client"
   },
   "dependencies": {
     "@prisma/client": "^6.19.2",
