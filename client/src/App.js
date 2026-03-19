@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
 import './App.css';
 
-// ⚠️ URL DE TON BACKEND RAILWAY
-const API_URL = "https://scintillating-inspiration-production.up.railway.app";
+// ✅ LA BONNE URL DE TON BACKEND RAILWAY
+const API_URL = "https://mon-jeu-multi-production-ed0c.up.railway.app";
 
-// Ajout des transports pour garantir la connexion sur Railway
+// Configuration robuste pour forcer la connexion sur Railway
 const socket = io(API_URL, {
     transports: ['websocket', 'polling']
 });
@@ -54,7 +54,7 @@ function App() {
             }
         } catch (err) {
             console.error("Erreur Fetch API :", err);
-            setError("Impossible de joindre le serveur. Vérifie que Railway est actif.");
+            setError("Impossible de joindre le serveur. Vérifie ta connexion.");
         }
     };
 
@@ -114,7 +114,7 @@ function App() {
                     </button>
                 </form>
                 {error && <p className="error-msg">{error}</p>}
-                <p className="toggle-auth" onClick={() => setIsLogin(!isLogin)}>
+                <p className="toggle-auth" onClick={() => setIsLogin(!isLogin)} style={{cursor: 'pointer'}}>
                     {isLogin ? "Pas de compte ? S'inscrire" : "Déjà inscrit ? Connexion"}
                 </p>
             </div>
