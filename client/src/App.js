@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
 import './App.css';
 
-// URL de ton API Railway (à changer après déploiement)
+// URL de ton backend Railway
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
 const socket = io(API_URL);
 
 function App() {
+    // Définition des états (States) qui manquaient dans ta capture
     const [user, setUser] = useState(null);
     const [players, setPlayers] = useState([]);
     const [showModal, setShowModal] = useState(false);
@@ -32,8 +33,12 @@ function App() {
                 setUser(data.user);
                 socket.emit('join_lobby', data.user);
                 setShowModal(false);
-            } else { alert(data.error); }
-        } catch (err) { alert("Serveur injoignable"); }
+            } else {
+                alert(data.error);
+            }
+        } catch (err) {
+            alert("Erreur de connexion au serveur");
+        }
     };
 
     return (
@@ -41,7 +46,10 @@ function App() {
             <header className="header">
                 <h1>MON JEU MULTI</h1>
                 {user ? (
-                    <div className="profile"><span>{user.avatar} {user.pseudo}</span><button onClick={() => window.location.reload()}>Déconnexion</button></div>
+                    <div className="profile">
+                        <span>{user.avatar} {user.pseudo}</span>
+                        <button onClick={() => window.location.reload()}>Déconnexion</button>
+                    </div>
                 ) : (
                     <button className="auth-btn" onClick={() => setShowModal(true)}>Mon Compte</button>
                 )}
@@ -49,19 +57,17 @@ function App() {
 
             <main className="hero">
                 {!user ? (
-                    <>
-                        <h2>Prêt à jouer ? Connectez-vous !</h2>
-                        <img src="https://via.placeholder.com/400x200" alt="Lobby" />
-                    </>
+                    <div className="welcome">
+                        <h2>Prêt à jouer ?</h2>
+                    </div>
                 ) : (
                     <div className="lobby-area">
-                        <h2>Lobby en direct 🕒</h2>
+                        <h2>Joueurs en ligne ({players.length})</h2>
                         <div className="players-list">
                             {players.map((p, idx) => (
                                 <div key={idx} className="player-tag">{p.avatar} {p.pseudo}</div>
                             ))}
                         </div>
-                        <button className="play-btn">LANCER LA PARTIE</button>
                     </div>
                 )}
             </main>
@@ -71,14 +77,15 @@ function App() {
                     <div className="modal-content">
                         <h3>{isLoginMode ? "Connexion" : "Inscription"}</h3>
                         <form onSubmit={handleAuth}>
-                            {!isLoginMode && <input name="pseudo" placeholder="Pseudo" onChange={e => setFormData({...formData, pseudo: e.target.value})} required />}
-                            <input name="email" type="email" placeholder="Email" onChange={e => setFormData({...formData, email: e.target.value})} required />
-                            <input name="password" type="password" placeholder="Mot de passe" onChange={e => setFormData({...formData, password: e.target.value})} required />
-                            {!isLoginMode && <input name="birthDate" type="date" onChange={e => setFormData({...formData, birthDate: e.target.value})} required />}
-                            <button type="submit">{isLoginMode ? "Entrer" : "Créer mon compte"}</button>
+                            {!isLoginMode && (
+                                <input placeholder="Pseudo" onChange={e => setFormData({...formData, pseudo: e.target.value})} required />
+                            )}
+                            <input type="email" placeholder="Email" onChange={e => setFormData({...formData, email: e.target.value})} required />
+                            <input type="password" placeholder="Mot de passe" onChange={e => setFormData({...formData, password: e.target.value})} required />
+                            <button type="submit">{isLoginMode ? "Entrer" : "Créer compte"}</button>
                         </form>
                         <p onClick={() => setIsLoginMode(!isLoginMode)} className="switch">
-                            {isLoginMode ? "Pas de compte ? S'inscrire" : "Déjà inscrit ? Se connecter"}
+                            {isLoginMode ? "Créer un compte" : "Déjà inscrit ?"}
                         </p>
                     </div>
                 </div>
