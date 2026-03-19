@@ -6,22 +6,19 @@ function QuizGame({ currentLobby, socket, user }) {
 
     const gs = currentLobby?.gameState;
 
+    // 🔥 CORRECT : useEffect est appelé avant le return conditionnel
     useEffect(() => {
         setHasAnswered(false);
         setEnlargedImage(null);
     }, [gs?.currentQuestionIndex]);
 
+    // 🔥 SÉCURITÉ : Après les hooks
     if (!gs || !gs.questions || !user) {
-        return <div style={{textAlign: 'center', marginTop: '50px', color: '#00d4ff', fontSize: '1.5rem'}}>Chargement du Quiz en cours...</div>;
+        return <div style={{textAlign: 'center', marginTop: '50px', color: '#00d4ff'}}>Chargement...</div>;
     }
 
     const currentQ = gs.questions[gs.currentQuestionIndex];
-
-    // 🔥 NOUVEAU : On utilise currentLobby.scores pour le tri et l'affichage (Persistance)
     const sortedPlayers = [...currentLobby.players].sort((a, b) => (currentLobby.scores?.[b.pseudo] || 0) - (currentLobby.scores?.[a.pseudo] || 0));
-
-    const answeredCount = Object.keys(gs.answersThisRound || {}).length;
-    const isHost = currentLobby.creator === user.pseudo;
 
     const submitAnswer = (answer) => {
         if (!hasAnswered) {
@@ -38,67 +35,30 @@ function QuizGame({ currentLobby, socket, user }) {
                         <h2>À quelle catégorie appartient cette personne ?</h2>
                         <div className="quiz-images-container">
                             {currentQ.images.map((imgSrc, i) => (
-                                <img
-                                    key={i}
-                                    src={`/${imgSrc}`}
-                                    alt={`Indice ${i+1}`}
-                                    className="quiz-img clickable-img"
-                                    onClick={() => setEnlargedImage(imgSrc)}
-                                />
+                                <img key={i} src={`/${imgSrc}`} alt="Quiz" className="quiz-img clickable-img" onClick={() => setEnlargedImage(imgSrc)} />
                             ))}
                         </div>
                         <div className="quiz-options">
                             {currentQ.options.map((opt, i) => (
-                                <button
-                                    key={i}
-                                    className={`btn-cyber quiz-btn ${hasAnswered ? 'btn-disabled' : ''}`}
-                                    onClick={() => submitAnswer(opt)}
-                                    disabled={hasAnswered}
-                                >
-                                    {opt}
-                                </button>
+                                <button key={i} className={`btn-cyber quiz-btn ${hasAnswered ? 'btn-disabled' : ''}`} onClick={() => submitAnswer(opt)} disabled={hasAnswered}>{opt}</button>
                             ))}
                         </div>
-
-                        {hasAnswered && (
-                            <div style={{marginTop: '20px'}}>
-                                <p className="waiting-text">En attente des autres joueurs ({answeredCount}/{currentLobby.players.length})...</p>
-
-                                {isHost && (
-                                    <button
-                                        className="btn-cyber btn-small"
-                                        style={{backgroundColor: '#ff2e63', border: 'none', marginTop: '10px'}}
-                                        onClick={() => socket.emit('forceNextRound', currentLobby.id)}
-                                    >
-                                        Forcer le résultat ⚡
-                                    </button>
-                                )}
-                            </div>
-                        )}
                     </>
                 ) : (
                     <div className="result-area">
-                        <h2>Résultat</h2>
-                        <p className="correct-answer-text">
-                            La bonne réponse était : <br/><strong>{currentQ.correct}</strong>
-                        </p>
-                        <p className="waiting-text">Préparation de la question suivante...</p>
+                        <p className="correct-answer-text">Réponse : <strong>{currentQ.correct}</strong></p>
                     </div>
                 )}
             </div>
-
             <div className="game-scoreboard">
                 <h2>Classement</h2>
-                {sortedPlayers.map((p, idx) => (
+                {sortedPlayers.map((p) => (
                     <div key={p.socketId} className="score-card">
-                        <span className="score-rank">#{idx + 1}</span>
-                        <span className="score-avatar">{p.avatar}</span>
-                        <span className="score-pseudo">{p.pseudo}</span>
+                        <span>{p.pseudo}</span>
                         <span className="score-points">{currentLobby.scores?.[p.pseudo] || 0} pts</span>
                     </div>
                 ))}
             </div>
-
             {enlargedImage && (
                 <div className="image-zoom-overlay" onClick={() => setEnlargedImage(null)}>
                     <img src={`/${enlargedImage}`} alt="Zoom" className="enlarged-img" />

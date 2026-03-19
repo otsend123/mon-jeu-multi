@@ -1,20 +1,14 @@
 async function startAdQuizGame(io, lobbies, lobby, prisma) {
     try {
-        if (!prisma.adQuestion) {
-            return io.to(lobby.id).emit('roomError', "La table AdQuestion est introuvable.");
-        }
+        if (!prisma.adQuestion) return io.to(lobby.id).emit('roomError', "Table AdQuestion introuvable.");
 
         const allQuestions = await prisma.adQuestion.findMany();
-        if (allQuestions.length === 0) {
-            return io.to(lobby.id).emit('roomError', "Aucune vidéo de pub en base de données !");
-        }
+        if (allQuestions.length === 0) return io.to(lobby.id).emit('roomError', "Aucune vidéo en base. Lancez 'node seed-ads.js'.");
 
         const selectedQuestions = allQuestions.sort(() => 0.5 - Math.random()).slice(0, 10);
 
         if (!lobby.scores) lobby.scores = {};
-        lobby.players.forEach(p => {
-            if (lobby.scores[p.pseudo] === undefined) lobby.scores[p.pseudo] = 0;
-        });
+        lobby.players.forEach(p => { if (lobby.scores[p.pseudo] === undefined) lobby.scores[p.pseudo] = 0; });
 
         lobby.status = 'playing';
         lobby.gameState = {
@@ -25,18 +19,14 @@ async function startAdQuizGame(io, lobbies, lobby, prisma) {
             roundEndTime: Date.now() + 60000
         };
 
-        // On nettoie tout timer existant avant d'en créer un nouveau
+        // 🔥 Sécurité : Nettoyage avant démarrage
         if (lobby.gameState.timeoutId) clearTimeout(lobby.gameState.timeoutId);
 
-        lobby.gameState.timeoutId = setTimeout(() => {
-            forceNext(io, lobbies, lobby);
-        }, 60000);
+        lobby.gameState.timeoutId = setTimeout(() => { forceNext(io, lobbies, lobby); }, 60000);
 
         io.to(lobby.id).emit('gameStarted', lobby);
         io.emit('updateLobbies', lobbies);
-    } catch (error) {
-        io.to(lobby.id).emit('roomError', "Erreur serveur : " + error.message);
-    }
+    } catch (error) { io.to(lobby.id).emit('roomError', "Erreur technique : " + error.message); }
 }
 
 function handleAnswer(io, lobbies, lobby, socketId, answer) {
@@ -57,7 +47,7 @@ function checkRoundEnd(io, lobbies, lobby, force = false) {
     const targetCount = activePlayersCount > 0 ? activePlayersCount : 1;
 
     if (force || answeredCount >= targetCount) {
-        // 🔥 CRITIQUE : On arrête immédiatement le timer pour stopper la boucle infinie
+        // 🔥 STOP le timer immédiatement pour éviter la boucle infinie
         if (lobby.gameState.timeoutId) {
             clearTimeout(lobby.gameState.timeoutId);
             lobby.gameState.timeoutId = null;
@@ -84,10 +74,8 @@ function checkRoundEnd(io, lobbies, lobby, force = false) {
                 lobby.gameState.roundStatus = 'question';
                 lobby.gameState.roundEndTime = Date.now() + 60000;
 
-                // On relance le timer pour la nouvelle question
-                lobby.gameState.timeoutId = setTimeout(() => {
-                    forceNext(io, lobbies, lobby);
-                }, 60000);
+                // Relance le timer pour la nouvelle question
+                lobby.gameState.timeoutId = setTimeout(() => { forceNext(io, lobbies, lobby); }, 60000);
 
                 io.to(lobby.id).emit('nextQuestion', lobby);
             } else {
@@ -99,12 +87,7 @@ function checkRoundEnd(io, lobbies, lobby, force = false) {
     }
 }
 
-function forceNext(io, lobbies, lobby) {
-    checkRoundEnd(io, lobbies, lobby, true);
-}
-
-function handleDisconnection(io, lobbies, lobby) {
-    checkRoundEnd(io, lobbies, lobby);
-}
+function forceNext(io, lobbies, lobby) { checkRoundEnd(io, lobbies, lobby, true); }
+function handleDisconnection(io, lobbies, lobby) { checkRoundEnd(io, lobbies, lobby); }
 
 module.exports = { startAdQuizGame, handleAnswer, handleDisconnection, forceNext };
