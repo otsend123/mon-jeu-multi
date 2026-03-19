@@ -2,9 +2,14 @@ import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
 import './App.css';
 
-// ⚠️ MODIFIE CETTE URL AVEC TON LIEN PUBLIC RAILWAY
+// ⚠️ URL DE TON BACKEND RAILWAY
 const API_URL = "https://scintillating-inspiration-production.up.railway.app";
-const socket = io(API_URL);
+
+// Ajout des transports pour garantir la connexion sur Railway
+const socket = io(API_URL, {
+    transports: ['websocket', 'polling']
+});
+
 const AVATARS = ['🕹️', '👽', '🤖', '👻', '👾', '👨‍🚀', '🐱', '🐲', '🐼', '🦊'];
 
 function App() {
@@ -20,28 +25,36 @@ function App() {
             socket.emit('joinGame', user);
             socket.on('updateUserList', (list) => setPlayers(list));
         }
-        return () => socket.off('updateUserList');
+
+        // Nettoyage à la destruction du composant
+        return () => {
+            socket.off('updateUserList');
+        };
     }, [user]);
 
     const handleAuth = async (e) => {
         e.preventDefault();
         setError('Tentative de connexion...');
+
         try {
             const res = await fetch(`${API_URL}${isLogin ? '/login' : '/register'}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(form)
             });
+
             const data = await res.json();
+
             if (res.ok) {
                 localStorage.setItem('user', JSON.stringify(data.user));
                 setUser(data.user);
                 setError('');
             } else {
-                setError(data.error);
+                setError(data.error || "Une erreur est survenue.");
             }
         } catch (err) {
-            setError("Impossible de joindre le serveur. Vérifie Railway.");
+            console.error("Erreur Fetch API :", err);
+            setError("Impossible de joindre le serveur. Vérifie que Railway est actif.");
         }
     };
 
@@ -52,6 +65,7 @@ function App() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ userId: user.id, avatar: emoji })
             });
+
             if (res.ok) {
                 const updated = { ...user, avatar: emoji };
                 setUser(updated);
@@ -60,8 +74,13 @@ function App() {
                 setShowModal(false);
             }
         } catch (e) {
-            console.error(e);
+            console.error("Erreur Avatar :", e);
         }
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem('user');
+        window.location.reload();
     };
 
     // --- ECRAN AUTHENTIFICATION ---
@@ -70,10 +89,29 @@ function App() {
             <div className="auth-container">
                 <h1 className="title-cyber">{isLogin ? 'CONNEXION' : 'INSCRIPTION'}</h1>
                 <form onSubmit={handleAuth}>
-                    {!isLogin && <input type="text" placeholder="Pseudo" required onChange={e => setForm({...form, pseudo: e.target.value})} />}
-                    <input type="email" placeholder="Email" required onChange={e => setForm({...form, email: e.target.value})} />
-                    <input type="password" placeholder="Mot de passe" required onChange={e => setForm({...form, password: e.target.value})} />
-                    <button type="submit" className="btn-cyber">{isLogin ? 'Entrer' : 'S\'inscrire'}</button>
+                    {!isLogin && (
+                        <input
+                            type="text"
+                            placeholder="Pseudo"
+                            required
+                            onChange={e => setForm({...form, pseudo: e.target.value})}
+                        />
+                    )}
+                    <input
+                        type="email"
+                        placeholder="Email"
+                        required
+                        onChange={e => setForm({...form, email: e.target.value})}
+                    />
+                    <input
+                        type="password"
+                        placeholder="Mot de passe"
+                        required
+                        onChange={e => setForm({...form, password: e.target.value})}
+                    />
+                    <button type="submit" className="btn-cyber">
+                        {isLogin ? 'Entrer' : "S'inscrire"}
+                    </button>
                 </form>
                 {error && <p className="error-msg">{error}</p>}
                 <p className="toggle-auth" onClick={() => setIsLogin(!isLogin)}>
@@ -92,7 +130,7 @@ function App() {
                     <div className="header-avatar">{user.avatar}</div>
                     <span>{user.pseudo}</span>
                 </div>
-                <button className="btn-disconnect" onClick={() => {localStorage.clear(); window.location.reload();}}>Quitter</button>
+                <button className="btn-disconnect" onClick={handleLogout}>Quitter</button>
             </header>
 
             <main className="lobby-content">
@@ -113,7 +151,9 @@ function App() {
                         <h2 className="modal-title">Choisir Avatar</h2>
                         <div className="avatar-selection-grid">
                             {AVATARS.map(emoji => (
-                                <div key={emoji} className="avatar-opt" onClick={() => updateAvatar(emoji)}>{emoji}</div>
+                                <div key={emoji} className="avatar-opt" onClick={() => updateAvatar(emoji)}>
+                                    {emoji}
+                                </div>
                             ))}
                         </div>
                         <button className="btn-cyber" onClick={() => setShowModal(false)}>Fermer</button>
