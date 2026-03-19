@@ -14,36 +14,32 @@ app.post('/register', async (req, res) => {
     try {
         const { email, pseudo, password, birthDate, avatar } = req.body;
 
-        // 1. VERIFICATION : Champs vides
+        // 1. Sécurité : Vérifier que les champs obligatoires sont là
         if (!email || !pseudo || !password) {
-            console.log("⚠️ Tentative d'inscription avec des champs manquants");
-            return res.status(400).json({ error: "Tous les champs sont obligatoires" });
+            return res.status(400).json({ error: "Email, pseudo et mot de passe requis" });
         }
 
-        console.log(`🔎 Vérification en base pour : ${email} et ${pseudo}`);
-
-        // 2. VERIFICATION : Doublons
+        // 2. Vérification des doublons (CORRIGÉ : on utilise 'pseudo' ici)
         const userExists = await prisma.user.findFirst({
             where: {
                 OR: [
-                    { email: email.toLowerCase() },
+                    { email: email },
                     { pseudo: pseudo }
                 ]
             }
         });
 
         if (userExists) {
-            console.log("❌ Email ou Pseudo déjà utilisé");
             return res.status(400).json({ error: "Email ou Pseudo déjà pris" });
         }
 
-        // 3. CREATION : Hachage du mot de passe
+        // 3. Hachage du mot de passe
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // 4. INSERTION : Nouvel utilisateur
+        // 4. Création de l'utilisateur
         const newUser = await prisma.user.create({
             data: {
-                email: email.toLowerCase(),
+                email: email,
                 pseudo: pseudo,
                 password: hashedPassword,
                 birthDate: birthDate ? new Date(birthDate) : null,
@@ -51,16 +47,21 @@ app.post('/register', async (req, res) => {
             }
         });
 
-        console.log("✅ Utilisateur créé avec succès :", newUser.pseudo);
+        console.log("✅ Utilisateur créé :", newUser.pseudo);
         res.status(201).json({ message: "Inscription réussie", user: { pseudo: newUser.pseudo } });
 
     } catch (error) {
-        console.error("🔥 Erreur Serveur détaillée :", error);
-        res.status(500).json({ error: "Erreur interne du serveur" });
+        console.error("🔥 Erreur Prisma/Serveur :", error);
+        res.status(500).json({ error: "Erreur lors de l'inscription" });
     }
+});
+
+// Route de test pour voir si le serveur répond
+app.get('/', (req, res) => {
+    res.send("Serveur CyberLobby en marche !");
 });
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-    console.log(`🚀 Serveur CyberLobby en ligne sur le port ${PORT}`);
+    console.log(`🚀 Serveur lancé sur le port ${PORT}`);
 });
