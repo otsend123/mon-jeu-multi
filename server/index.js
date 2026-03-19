@@ -140,6 +140,10 @@ io.on('connection', (socket) => {
         const lobby = lobbies.find(l => l.id === lobbyId);
         const user = connectedUsers.get(socket.id);
         if (lobby && user && lobby.creator === user.pseudo && lobby.status === 'playing') {
+            // 🔥 Nettoyage du timer pour éviter le "Maximum call stack size"
+            if (lobby.gameState && lobby.gameState.timeoutId) {
+                clearTimeout(lobby.gameState.timeoutId);
+            }
             lobby.status = 'waiting';
             lobby.gameState = null;
             io.to(lobby.id).emit('lobbyUpdated', lobby);

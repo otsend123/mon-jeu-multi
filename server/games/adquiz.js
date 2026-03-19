@@ -25,6 +25,9 @@ async function startAdQuizGame(io, lobbies, lobby, prisma) {
             roundEndTime: Date.now() + 60000
         };
 
+        // On nettoie tout timer existant avant d'en créer un nouveau
+        if (lobby.gameState.timeoutId) clearTimeout(lobby.gameState.timeoutId);
+
         lobby.gameState.timeoutId = setTimeout(() => {
             forceNext(io, lobbies, lobby);
         }, 60000);
@@ -47,14 +50,19 @@ function handleAnswer(io, lobbies, lobby, socketId, answer) {
 }
 
 function checkRoundEnd(io, lobbies, lobby, force = false) {
-    if (lobby.status !== 'playing' || lobby.gameState.roundStatus !== 'question') return;
+    if (!lobby || !lobby.gameState || lobby.gameState.roundStatus !== 'question') return;
 
     const answeredCount = Object.keys(lobby.gameState.answersThisRound).length;
     const activePlayersCount = lobby.players.filter(p => io.sockets.sockets.has(p.socketId)).length;
     const targetCount = activePlayersCount > 0 ? activePlayersCount : 1;
 
     if (force || answeredCount >= targetCount) {
-        clearTimeout(lobby.gameState.timeoutId);
+        // 🔥 CRITIQUE : On arrête immédiatement le timer pour stopper la boucle infinie
+        if (lobby.gameState.timeoutId) {
+            clearTimeout(lobby.gameState.timeoutId);
+            lobby.gameState.timeoutId = null;
+        }
+
         lobby.gameState.roundStatus = 'result';
         const currentQ = lobby.gameState.questions[lobby.gameState.currentQuestionIndex];
 
@@ -68,12 +76,19 @@ function checkRoundEnd(io, lobbies, lobby, force = false) {
         io.to(lobby.id).emit('roundResult', lobby);
 
         setTimeout(() => {
+            if (!lobby || lobby.status !== 'playing') return;
+
             if (lobby.gameState.currentQuestionIndex < lobby.gameState.questions.length - 1) {
                 lobby.gameState.currentQuestionIndex++;
                 lobby.gameState.answersThisRound = {};
                 lobby.gameState.roundStatus = 'question';
                 lobby.gameState.roundEndTime = Date.now() + 60000;
-                lobby.gameState.timeoutId = setTimeout(() => forceNext(io, lobbies, lobby), 60000);
+
+                // On relance le timer pour la nouvelle question
+                lobby.gameState.timeoutId = setTimeout(() => {
+                    forceNext(io, lobbies, lobby);
+                }, 60000);
+
                 io.to(lobby.id).emit('nextQuestion', lobby);
             } else {
                 lobby.status = 'waiting';
