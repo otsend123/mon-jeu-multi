@@ -1,10 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@300;400;700&display=swap');
 
-body {
-  margin: 0; padding: 0; font-family: 'Roboto', sans-serif;
-  background: radial-gradient(circle, #1a1a2e 0%, #16213e 100%);
-  color: #ffffff; min-height: 100vh; overflow-x: hidden;
-}
+body { margin: 0; padding: 0; font-family: 'Roboto', sans-serif; background: radial-gradient(circle, #1a1a2e 0%, #16213e 100%); color: #ffffff; min-height: 100vh; overflow-x: hidden; }
 
 /* --- AUTH & GLOBAL --- */
 .auth-container { max-width: 400px; margin: 100px auto; padding: 30px; background: rgba(22, 33, 62, 0.8); border: 2px solid #00d4ff; border-radius: 15px; text-align: center; box-shadow: 0 0 20px rgba(0, 212, 255, 0.2); }
@@ -32,9 +28,8 @@ input:focus { outline: none; border-color: #00d4ff; box-shadow: 0 0 8px #00d4ff;
 .panel-section { background: rgba(22, 33, 62, 0.7); border: 1px solid #0f3460; border-radius: 15px; padding: 25px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
 .panel-title { font-family: 'Orbitron'; color: #00d4ff; margin-top: 0; margin-bottom: 20px; font-size: 1.2rem; border-bottom: 1px solid rgba(0, 212, 255, 0.2); padding-bottom: 10px;}
 
-/* --- ACCUEIL : LOBBIES --- */
+/* --- ACCUEIL --- */
 .create-lobby-form { display: flex; gap: 10px; margin-bottom: 20px; }
-.create-lobby-form input { margin: 0; flex: 1; }
 .lobbies-list { display: flex; flex-direction: column; gap: 15px; max-height: 400px; overflow-y: auto;}
 .lobby-card { background: rgba(15, 52, 96, 0.5); border: 1px solid rgba(0, 212, 255, 0.3); border-radius: 8px; padding: 15px; display: flex; justify-content: space-between; align-items: center;}
 .lobby-info { display: flex; flex-direction: column; gap: 5px; }
@@ -44,45 +39,59 @@ input:focus { outline: none; border-color: #00d4ff; box-shadow: 0 0 8px #00d4ff;
 .lobby-count { color: #00d4ff; font-weight: bold; }
 .btn-join { background: #00d4ff; color: #1a1a2e; border: none; padding: 8px 15px; border-radius: 5px; font-weight: bold; cursor: pointer; transition: 0.2s;}
 .btn-join:hover { background: #fff; }
+.btn-join:disabled { background: #555; color: #aaa; cursor: not-allowed; }
 
-/* --- ROOM : LES 8 SLOTS --- */
-.room-section { display: flex; flex-direction: column; }
+/* --- ROOM : SLOTS & GAMES --- */
 .slots-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top: 10px; }
-.slot-card {
-  height: 120px; border-radius: 10px; display: flex; flex-direction: column;
-  justify-content: center; align-items: center; gap: 10px; padding: 10px; position: relative;
-}
+.slot-card { height: 120px; border-radius: 10px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; padding: 10px; position: relative; }
 .slot-card.filled { background: rgba(15, 52, 96, 0.8); border: 2px solid #00d4ff; box-shadow: 0 0 10px rgba(0, 212, 255, 0.3); }
 .slot-card.empty { background: transparent; border: 2px dashed #0f3460; opacity: 0.7; }
 .slot-avatar { font-size: 2.5rem; }
 .slot-name { font-family: 'Orbitron'; font-size: 0.9rem; font-weight: bold; text-align: center; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
 .host-badge { position: absolute; top: -10px; right: -10px; background: #e94560; color: white; font-size: 0.7rem; padding: 3px 8px; border-radius: 10px; font-weight: bold; border: 1px solid #ff2e63;}
 
-/* --- SÉLECTION DES JEUX (GAMES GRID) --- */
 .games-grid { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; margin-top: 15px;}
-.game-card {
-  width: 200px; height: 160px; background: rgba(15, 52, 96, 0.5);
-  border: 2px solid #0f3460; border-radius: 15px; display: flex; flex-direction: column;
-  justify-content: center; align-items: center; cursor: pointer; transition: 0.3s;
-}
+.game-card { width: 200px; height: 160px; background: rgba(15, 52, 96, 0.5); border: 2px solid #0f3460; border-radius: 15px; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; transition: 0.3s; }
 .game-card:hover { transform: translateY(-5px); border-color: #00d4ff; box-shadow: 0 5px 15px rgba(0, 212, 255, 0.3); }
 .game-card.selected { border-color: #00ff00; background: rgba(0, 255, 0, 0.1); box-shadow: 0 0 20px rgba(0, 255, 0, 0.4); }
 .game-card.disabled { cursor: not-allowed; opacity: 0.6; }
 .game-card.disabled:hover { transform: none; border-color: #0f3460; box-shadow: none; }
 .game-icon { font-size: 4rem; margin-bottom: 15px; }
-.game-name { font-family: 'Orbitron'; font-weight: bold; font-size: 1.1rem; text-align: center; }
 
-/* --- TABLEAUX JOUEURS --- */
-.table-container { max-height: 400px; overflow-y: auto; }
-.players-table { width: 100%; border-collapse: collapse; text-align: left; }
-.players-table td { padding: 12px; border-bottom: 1px solid rgba(15, 52, 96, 0.5); background: rgba(0,0,0,0.2);}
-.players-table tr:hover td { background: rgba(0, 212, 255, 0.1); }
-.td-center { text-align: center; }
-.player-avatar { font-size: 1.5rem; }
-.status-dot { display: inline-block; width: 10px; height: 10px; background-color: #00ff00; border-radius: 50%; box-shadow: 0 0 5px #00ff00;}
+/* --- QUIZ GAME CSS (MODIFIÉ POUR PLUS DE COMPACITÉ) --- */
+.game-dashboard { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; max-width: 1200px; margin: 20px auto; padding: 0 20px;}
+.game-play-area { background: rgba(22, 33, 62, 0.9); border: 2px solid #00d4ff; border-radius: 15px; padding: 20px; text-align: center; box-shadow: 0 0 30px rgba(0, 212, 255, 0.2); display: flex; flex-direction: column; justify-content: center;}
 
-/* --- TOAST INVITATION --- */
+/* Titre de la question plus petit */
+.game-play-area h2 { font-family: 'Orbitron'; color: #00d4ff; margin-top: 0; font-size: 1.5rem; margin-bottom: 20px;}
+
+/* Images plus compactes */
+.quiz-images-container { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-bottom: 25px; }
+.quiz-img { width: 140px; height: 180px; object-fit: cover; border-radius: 8px; border: 2px solid #0f3460; box-shadow: 0 5px 15px rgba(0,0,0,0.5); transition: 0.3s;}
+.quiz-img:hover { transform: scale(1.05); border-color: #00d4ff; }
+
+/* Boutons plus discrets */
+.quiz-options { display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;}
+.quiz-btn { min-width: 160px; font-size: 1rem; padding: 10px 20px; }
+
+.waiting-text { color: #aaa; font-style: italic; margin-top: 15px; font-size: 1rem;}
+.result-area { padding: 30px 0; }
+.correct-answer-text { font-size: 1.3rem; color: #00ff00; margin-bottom: 20px;}
+
+/* Classement latéral */
+.game-scoreboard { background: rgba(15, 52, 96, 0.8); border: 1px solid #0f3460; border-radius: 15px; padding: 20px; }
+.game-scoreboard h2 { font-family: 'Orbitron'; color: #ff2e63; text-align: center; border-bottom: 1px solid #ff2e63; padding-bottom: 10px; margin-top: 0;}
+.score-card { display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.3); padding: 10px 15px; border-radius: 10px; margin-bottom: 10px; border-left: 4px solid #00d4ff;}
+.score-rank { font-weight: bold; color: #888; width: 25px;}
+.score-avatar { font-size: 1.3rem; }
+.score-pseudo { flex: 1; margin-left: 10px; font-weight: bold; font-size: 1rem;}
+.score-points { font-family: 'Orbitron'; color: #00ff00; font-weight: bold; font-size: 1.1rem;}
+
+/* --- TOAST & CHAT --- */
 .invite-toast { position: fixed; top: 80px; right: 20px; background: rgba(22, 33, 62, 0.95); border: 2px solid #00d4ff; padding: 20px; border-radius: 10px; z-index: 2000; box-shadow: 0 0 20px rgba(0, 212, 255, 0.5); }
+.chat-input-area { display: flex; margin-top: 10px;}
+.chat-input-area input { margin: 0; border-radius: 5px 0 0 5px; border-right: none;}
+.btn-send { background: #00d4ff; color: #1a1a2e; border: none; padding: 0 20px; border-radius: 0 5px 5px 0; font-weight: bold; cursor: pointer;}
 
 /* --- MODALE AVATAR --- */
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 1000;}
@@ -91,6 +100,9 @@ input:focus { outline: none; border-color: #00d4ff; box-shadow: 0 0 8px #00d4ff;
 .avatar-opt { font-size: 2.5rem; cursor: pointer; transition: 0.2s; }
 .avatar-opt:hover { transform: scale(1.2); }
 
+/* --- RESPONSIVE (Mobiles & Petits écrans) --- */
 @media (max-width: 900px) {
   .dashboard-top { grid-template-columns: 1fr; }
+  .game-dashboard { grid-template-columns: 1fr; } /* Le score passe en dessous du jeu sur mobile */
+  .quiz-img { width: 90px; height: 120px; } /* Encore plus petit sur mobile */
 }
