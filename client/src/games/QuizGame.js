@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
 
-function QuizGame({ currentLobby, socket, user }) { // Réception du 'user'
+function QuizGame({ currentLobby, socket, user }) {
     const [hasAnswered, setHasAnswered] = useState(false);
     const [enlargedImage, setEnlargedImage] = useState(null);
 
-    const gs = currentLobby.gameState;
+    // 🔥 SÉCURITÉ : Vérifie que les données du jeu sont bien chargées
+    const gs = currentLobby?.gameState;
+    if (!gs || !gs.questions || !user) {
+        return <div style={{textAlign: 'center', marginTop: '50px', color: '#00d4ff', fontSize: '1.5rem'}}>Chargement du Quiz en cours...</div>;
+    }
+
     const currentQ = gs.questions[gs.currentQuestionIndex];
     const sortedPlayers = [...currentLobby.players].sort((a, b) => (gs.scores[b.socketId] || 0) - (gs.scores[a.socketId] || 0));
 
-    // Variables pour l'interface d'attente
     const answeredCount = Object.keys(gs.answersThisRound || {}).length;
     const isHost = currentLobby.creator === user.pseudo;
 
@@ -54,7 +58,6 @@ function QuizGame({ currentLobby, socket, user }) { // Réception du 'user'
                             ))}
                         </div>
 
-                        {/* --- INTERFACE D'ATTENTE SÉCURISÉE --- */}
                         {hasAnswered && (
                             <div style={{marginTop: '20px'}}>
                                 <p className="waiting-text">En attente des autres joueurs ({answeredCount}/{currentLobby.players.length})...</p>

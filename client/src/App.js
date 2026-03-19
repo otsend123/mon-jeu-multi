@@ -26,7 +26,6 @@ function App() {
     const [currentLobby, setCurrentLobby] = useState(null);
     const [invite, setInvite] = useState(null);
 
-    // Variables du Tchat (maintenant utilisées dans l'affichage !)
     const [messages, setMessages] = useState([]);
     const [currentMsg, setCurrentMsg] = useState('');
     const messagesEndRef = useRef(null);
@@ -34,6 +33,8 @@ function App() {
     useEffect(() => {
         if (user) {
             socket.emit('joinGame', user);
+
+            socket.on('connect', () => { socket.emit('joinGame', user); });
 
             socket.on('updateUserList', (list) => setPlayers(list));
             socket.on('updateLobbies', (lobbyList) => setLobbies(lobbyList));
@@ -141,7 +142,8 @@ function App() {
                     </h1>
                 </header>
                 {currentLobby.selectedGame === 'quiz' && (
-                    <QuizGame currentLobby={currentLobby} socket={socket} />
+                    /* 🔥 CORRECTION ICI : On passe la variable user ! */
+                    <QuizGame currentLobby={currentLobby} socket={socket} user={user} />
                 )}
             </div>
         );
@@ -237,7 +239,6 @@ function App() {
 
             <main className="main-dashboard">
                 <div className="dashboard-top">
-                    {/* Colonne de Gauche : Salons */}
                     <section className="panel-section lobbies-section">
                         <h2 className="panel-title">Salons disponibles</h2>
                         <form className="create-lobby-form" onSubmit={(e) => { e.preventDefault(); if(newLobbyName) { socket.emit('createLobby', newLobbyName); setNewLobbyName(''); } }}>
@@ -260,7 +261,6 @@ function App() {
                         </div>
                     </section>
 
-                    {/* Colonne de Droite : Joueurs & Tchat */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
                         <section className="panel-section players-section">
                             <h2 className="panel-title">Joueurs en ligne ({players.length})</h2>
@@ -304,7 +304,6 @@ function App() {
                 </div>
             </main>
 
-            {/* MODALE AVATAR */}
             {showModal && (
                 <div className="modal-overlay" onClick={() => setShowModal(false)}>
                     <div className="avatar-modal" onClick={e => e.stopPropagation()}>
