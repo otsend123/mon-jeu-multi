@@ -146,7 +146,6 @@ function App() {
                         {currentLobby.selectedGame === 'quiz' ? `QUIZ - Question ${currentQIndex + 1}/${totalQ}` : currentLobby.name}
                     </h1>
 
-                    {/* 🔥 NOUVEAU : Boutons pour quitter la partie en cours */}
                     <div style={{display: 'flex', gap: '15px'}}>
                         {isHost && (
                             <button className="btn-disconnect" onClick={() => socket.emit('stopGame', currentLobby.id)}>⏹️ Arrêter</button>
@@ -174,6 +173,7 @@ function App() {
                     <button className="btn-disconnect" onClick={() => socket.emit('leaveLobby')}>🚪 Quitter le salon</button>
                 </header>
                 <main className="main-dashboard dashboard-top">
+                    {/* COLONNE GAUCHE : LES SLOTS */}
                     <section className="panel-section room-section">
                         <h2 className="panel-title">Équipe ({currentLobby.players.length}/8)</h2>
                         <div className="slots-grid">
@@ -184,7 +184,6 @@ function App() {
 
                                         <div className="slot-name">
                                             {player.pseudo}
-                                            {/* 🔥 NOUVEAU : Affiche le score cumulé des parties précédentes ! */}
                                             {currentLobby.scores && currentLobby.scores[player.pseudo] !== undefined && (
                                                 <span style={{color: '#00ff00', display: 'block', fontSize: '0.85rem', marginTop: '2px'}}>
                                                     {currentLobby.scores[player.pseudo]} pts
@@ -217,28 +216,59 @@ function App() {
                             )}
                         </div>
                     </section>
-                    <section className="panel-section games-section">
-                        <h2 className="panel-title">Choix du jeu</h2>
-                        <div className="games-grid">
-                            {AVAILABLE_GAMES.map(game => (
-                                <div
-                                    key={game.id}
-                                    className={`game-card ${currentLobby.selectedGame === game.id ? 'selected' : ''} ${!isHost ? 'disabled' : ''}`}
-                                    onClick={() => { if(isHost) socket.emit('selectGame', { lobbyId: currentLobby.id, gameId: game.id }); }}
-                                >
-                                    <div className="game-icon">{game.icon}</div>
-                                    <div className="game-name">{game.name}</div>
-                                </div>
-                            ))}
-                        </div>
-                    </section>
+
+                    {/* COLONNE DROITE : JEUX + INVITATIONS */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
+                        <section className="panel-section games-section">
+                            <h2 className="panel-title">Choix du jeu</h2>
+                            <div className="games-grid">
+                                {AVAILABLE_GAMES.map(game => (
+                                    <div
+                                        key={game.id}
+                                        className={`game-card ${currentLobby.selectedGame === game.id ? 'selected' : ''} ${!isHost ? 'disabled' : ''}`}
+                                        onClick={() => { if(isHost) socket.emit('selectGame', { lobbyId: currentLobby.id, gameId: game.id }); }}
+                                    >
+                                        <div className="game-icon">{game.icon}</div>
+                                        <div className="game-name">{game.name}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+
+                        {/* 🔥 NOUVEAU : LA LISTE DES JOUEURS POUR INVITATION DEPUIS LE SALON */}
+                        <section className="panel-section players-section">
+                            <h2 className="panel-title">Inviter des joueurs en ligne ({players.length - 1})</h2>
+                            <div className="table-container" style={{maxHeight: '150px'}}>
+                                <table className="players-table">
+                                    <tbody>
+                                    {players.map(p => {
+                                        if (p.pseudo === user.pseudo) return null; // Ne pas s'afficher soi-même
+                                        const isInLobby = currentLobby.players.some(lobbyP => lobbyP.pseudo === p.pseudo);
+                                        return (
+                                            <tr key={p.id}>
+                                                <td className="td-center" width="40"><span className="player-avatar">{p.avatar}</span></td>
+                                                <td>{p.pseudo}</td>
+                                                <td className="td-center">
+                                                    {isInLobby ? (
+                                                        <span style={{color: '#888', fontSize: '0.85rem'}}>Dans le salon</span>
+                                                    ) : (
+                                                        <button className="btn-join" style={{padding: '5px 10px', fontSize: '0.8rem'}} onClick={() => socket.emit('invitePlayer', { targetSocketId: p.socketId, lobbyId: currentLobby.id })}>Inviter</button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
                 </main>
             </div>
         );
     }
 
     // --- VUE 1 : ACCUEIL LOBBY ---
-    // (Le reste de l'App.js reste identique)
     return (
         <div className="App">
             <header className="header-cyber">
