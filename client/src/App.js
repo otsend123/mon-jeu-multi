@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
 import QuizGame from './games/QuizGame';
+import AdQuizGame from './games/AdQuizGame';
 import './App.css';
 
 const API_URL = "https://mon-jeu-multi-production-ed0c.up.railway.app";
@@ -9,6 +10,7 @@ const socket = io(API_URL, { transports: ['websocket', 'polling'] });
 const AVATARS = ['🕹️', '👽', '🤖', '👻', '👾', '👨‍🚀', '🐱', '🐲', '🐼', '🦊'];
 const AVAILABLE_GAMES = [
     { id: 'quiz', name: 'Quiz Image', icon: '📸' },
+    { id: 'adquiz', name: 'Devine la Pub', icon: '🎬' },
     { id: 'tictactoe', name: 'Morpion Cyber', icon: '❌' }
 ];
 
@@ -143,7 +145,9 @@ function App() {
             <div className="App game-mode">
                 <header className="header-cyber">
                     <h1 className="title-cyber">
-                        {currentLobby.selectedGame === 'quiz' ? `QUIZ - Question ${currentQIndex + 1}/${totalQ}` : currentLobby.name}
+                        {currentLobby.selectedGame === 'quiz' ? `QUIZ IMAGE - Question ${currentQIndex + 1}/${totalQ}` :
+                            currentLobby.selectedGame === 'adquiz' ? `DEVINE LA PUB - Question ${currentQIndex + 1}/${totalQ}` :
+                                currentLobby.name}
                     </h1>
 
                     <div style={{display: 'flex', gap: '15px'}}>
@@ -155,6 +159,9 @@ function App() {
                 </header>
                 {currentLobby.selectedGame === 'quiz' && (
                     <QuizGame currentLobby={currentLobby} socket={socket} user={user} />
+                )}
+                {currentLobby.selectedGame === 'adquiz' && (
+                    <AdQuizGame currentLobby={currentLobby} socket={socket} user={user} />
                 )}
             </div>
         );
@@ -181,7 +188,6 @@ function App() {
                                 player ? (
                                     <div key={idx} className="slot-card filled">
                                         <div className="slot-avatar">{player.avatar}</div>
-
                                         <div className="slot-name">
                                             {player.pseudo}
                                             {currentLobby.scores && currentLobby.scores[player.pseudo] !== undefined && (
@@ -190,7 +196,6 @@ function App() {
                                                 </span>
                                             )}
                                         </div>
-
                                         {player.pseudo === currentLobby.creator && <div className="host-badge">👑 Hôte</div>}
                                     </div>
                                 ) : (
@@ -235,14 +240,13 @@ function App() {
                             </div>
                         </section>
 
-                        {/* 🔥 NOUVEAU : LA LISTE DES JOUEURS POUR INVITATION DEPUIS LE SALON */}
                         <section className="panel-section players-section">
-                            <h2 className="panel-title">Inviter des joueurs en ligne ({players.length - 1})</h2>
+                            <h2 className="panel-title">Inviter des joueurs en ligne ({Math.max(0, players.length - 1)})</h2>
                             <div className="table-container" style={{maxHeight: '150px'}}>
                                 <table className="players-table">
                                     <tbody>
                                     {players.map(p => {
-                                        if (p.pseudo === user.pseudo) return null; // Ne pas s'afficher soi-même
+                                        if (p.pseudo === user.pseudo) return null;
                                         const isInLobby = currentLobby.players.some(lobbyP => lobbyP.pseudo === p.pseudo);
                                         return (
                                             <tr key={p.id}>

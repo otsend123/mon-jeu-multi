@@ -5,6 +5,7 @@ const bcrypt = require('bcrypt');
 const http = require('http');
 const { Server } = require("socket.io");
 const quizGame = require('./games/quiz.js');
+const adQuizGame = require('./games/adquiz.js');
 
 const app = express();
 const server = http.createServer(app);
@@ -15,7 +16,7 @@ const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } 
 app.use(cors());
 app.use(express.json());
 
-app.get('/', (req, res) => res.status(200).send("✅ Backend CyberLobby (Scores Persistants) en ligne !"));
+app.get('/', (req, res) => res.status(200).send("✅ Backend CyberLobby en ligne !"));
 
 let connectedUsers = new Map();
 let userSockets = new Map();
@@ -39,8 +40,9 @@ function leaveCurrentLobby(socketId) {
                 if (lobby.creator === user.pseudo && lobby.players.length > 0) {
                     lobby.creator = lobby.players[0].pseudo;
                 }
-                if (lobby.status === 'playing' && lobby.selectedGame === 'quiz') {
-                    quizGame.handleDisconnection(io, lobbies, lobby);
+                if (lobby.status === 'playing') {
+                    if (lobby.selectedGame === 'quiz') quizGame.handleDisconnection(io, lobbies, lobby);
+                    if (lobby.selectedGame === 'adquiz') adQuizGame.handleDisconnection(io, lobbies, lobby);
                 }
                 io.to(lobby.id).emit('lobbyUpdated', lobby);
             }
@@ -90,7 +92,6 @@ io.on('connection', (socket) => {
             const newLobby = {
                 id: `room_${Date.now()}`, name: lobbyName, creator: user.pseudo,
                 players: [user], selectedGame: null, status: 'waiting'
-                // On garde les scores globaux du salon dans "lobby.scores" (créé au premier jeu)
             };
             lobbies.push(newLobby);
             socket.join(newLobby.id);
@@ -131,16 +132,16 @@ io.on('connection', (socket) => {
         const user = connectedUsers.get(socket.id);
         if (lobby && user && lobby.creator === user.pseudo) {
             if (lobby.selectedGame === 'quiz') await quizGame.startQuizGame(io, lobbies, lobby, prisma);
+            if (lobby.selectedGame === 'adquiz') await adQuizGame.startAdQuizGame(io, lobbies, lobby, prisma);
         }
     });
 
-    // 🔥 NOUVEAU : Le bouton pour forcer l'arrêt total du jeu
     socket.on('stopGame', (lobbyId) => {
         const lobby = lobbies.find(l => l.id === lobbyId);
         const user = connectedUsers.get(socket.id);
         if (lobby && user && lobby.creator === user.pseudo && lobby.status === 'playing') {
             lobby.status = 'waiting';
-            lobby.gameState = null; // On nettoie le jeu
+            lobby.gameState = null;
             io.to(lobby.id).emit('lobbyUpdated', lobby);
             io.emit('updateLobbies', lobbies);
         }
@@ -148,8 +149,9 @@ io.on('connection', (socket) => {
 
     socket.on('submitAnswer', ({ lobbyId, answer }) => {
         const lobby = lobbies.find(l => l.id === lobbyId);
-        if (lobby && lobby.status === 'playing' && lobby.selectedGame === 'quiz') {
-            quizGame.handleAnswer(io, lobbies, lobby, socket.id, answer);
+        if (lobby && lobby.status === 'playing') {
+            if (lobby.selectedGame === 'quiz') quizGame.handleAnswer(io, lobbies, lobby, socket.id, answer);
+            if (lobby.selectedGame === 'adquiz') adQuizGame.handleAnswer(io, lobbies, lobby, socket.id, answer);
         }
     });
 
@@ -158,6 +160,7 @@ io.on('connection', (socket) => {
         const user = connectedUsers.get(socket.id);
         if (lobby && user && lobby.creator === user.pseudo && lobby.status === 'playing') {
             if (lobby.selectedGame === 'quiz') quizGame.forceNext(io, lobbies, lobby);
+            if (lobby.selectedGame === 'adquiz') adQuizGame.forceNext(io, lobbies, lobby);
         }
     });
 

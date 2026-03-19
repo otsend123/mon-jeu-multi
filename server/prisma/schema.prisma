@@ -17,11 +17,18 @@ model User {
   createdAt DateTime @default(now())
 }
 
-// Nouvelle table pour le Quiz
 model Question {
   id        Int      @id @default(autoincrement())
-  images    String[] // Exemple: ["img/1a.jpg", "img/1b.jpg", "img/1c.jpg"]
-  options   String[] // Exemple: ["Femme trans", "Femme cis", "Autre"]
+  images    String[]
+  options   String[]
+  correct   String
+  createdAt DateTime @default(now())
+}
+
+model AdQuestion {
+  id        Int      @id @default(autoincrement())
+  videoUrl  String
+  options   String[]
   correct   String
   createdAt DateTime @default(now())
 }
