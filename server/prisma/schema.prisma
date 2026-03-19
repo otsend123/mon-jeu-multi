@@ -1,3 +1,5 @@
+// server/prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,5 +16,14 @@ model User {
   password  String
   birthDate DateTime?
   avatar    String?  @default("👤")
+  createdAt DateTime @default(now())
+}
+
+// NOUVELLE TABLE POUR LE QUIZ
+model Question {
+  id        Int      @id @default(autoincrement())
+  images    String[] // Exemple: ["img/1a.jpg", "img/1b.jpg", "img/1c.jpg"]
+  options   String[] // Exemple: ["Femme trans", "Femme cis", "Autre"]
+  correct   String   // Exemple: "Femme trans"
   createdAt DateTime @default(now())
 }

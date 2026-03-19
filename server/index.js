@@ -1,3 +1,4 @@
+// server/index.js
 const express = require('express');
 const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
@@ -5,20 +6,18 @@ const bcrypt = require('bcrypt');
 const http = require('http');
 const { Server } = require("socket.io");
 
+const quizGame = require('./games/quiz.js');
+
 const app = express();
 const server = http.createServer(app);
 const prisma = new PrismaClient();
 
-const io = new Server(server, {
-    cors: { origin: "*", methods: ["GET", "POST"] }
-});
+const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
 
 app.use(cors());
 app.use(express.json());
 
-app.get('/', (req, res) => {
-    res.status(200).send("✅ Backend CyberLobby en ligne (Choix des jeux activé) !");
-});
+app.get('/', (req, res) => res.status(200).send("✅ Backend CyberLobby en ligne !"));
 
 let connectedUsers = new Map();
 let userSockets = new Map();
@@ -39,9 +38,11 @@ function leaveCurrentLobby(socketId) {
             if (lobby.players.length === 0) {
                 lobbies.splice(index, 1);
             } else {
-                // Si l'hôte quitte, on nomme le joueur suivant comme nouvel hôte (Optionnel mais pratique)
                 if (lobby.creator === user.pseudo && lobby.players.length > 0) {
                     lobby.creator = lobby.players[0].pseudo;
+                }
+                if (lobby.status === 'playing') {
+                    if (lobby.selectedGame === 'quiz') quizGame.handleDisconnection(io, lobbies, lobby);
                 }
                 io.to(lobby.id).emit('lobbyUpdated', lobby);
             }
@@ -59,15 +60,10 @@ io.on('connection', (socket) => {
             leaveCurrentLobby(oldSocketId);
             connectedUsers.delete(oldSocketId);
         }
-
         userSockets.set(userData.id, socket.id);
         connectedUsers.set(socket.id, {
-            socketId: socket.id,
-            id: userData.id,
-            pseudo: userData.pseudo,
-            avatar: userData.avatar || '👤'
+            socketId: socket.id, id: userData.id, pseudo: userData.pseudo, avatar: userData.avatar || '👤'
         });
-
         io.emit('updateUserList', Array.from(connectedUsers.values()));
         socket.emit('updateLobbies', lobbies);
     });
@@ -76,16 +72,11 @@ io.on('connection', (socket) => {
         const user = connectedUsers.get(socket.id);
         if (user && lobbyName.trim() !== '') {
             leaveCurrentLobby(socket.id);
-
             const newLobby = {
-                id: `room_${Date.now()}`,
-                name: lobbyName,
-                creator: user.pseudo,
-                players: [user],
-                selectedGame: null // <-- NOUVEAU : Stocke l'ID du jeu choisi
+                id: `room_${Date.now()}`, name: lobbyName, creator: user.pseudo,
+                players: [user], selectedGame: null, status: 'waiting'
             };
             lobbies.push(newLobby);
-
             socket.join(newLobby.id);
             socket.emit('lobbyJoined', newLobby);
             io.emit('updateLobbies', lobbies);
@@ -95,16 +86,12 @@ io.on('connection', (socket) => {
     socket.on('joinLobby', (lobbyId) => {
         const user = connectedUsers.get(socket.id);
         const lobby = lobbies.find(l => l.id === lobbyId);
-
         if (user && lobby) {
-            if (lobby.players.length >= 8) {
-                socket.emit('roomError', "Ce salon est plein (8/8).");
-                return;
-            }
+            if (lobby.players.length >= 8) return socket.emit('roomError', "Ce salon est plein (8/8).");
+            if (lobby.status === 'playing') return socket.emit('roomError', "Une partie est déjà en cours dans ce salon.");
             leaveCurrentLobby(socket.id);
             lobby.players.push(user);
             socket.join(lobby.id);
-
             socket.emit('lobbyJoined', lobby);
             io.to(lobby.id).emit('lobbyUpdated', lobby);
             io.emit('updateLobbies', lobbies);
@@ -116,16 +103,39 @@ io.on('connection', (socket) => {
         socket.emit('lobbyLeft');
     });
 
-    // --- NOUVEAU : SÉLECTIONNER UN JEU ---
     socket.on('selectGame', ({ lobbyId, gameId }) => {
         const lobby = lobbies.find(l => l.id === lobbyId);
         const user = connectedUsers.get(socket.id);
-
-        // Seul le créateur peut changer le jeu
-        if (lobby && user && lobby.creator === user.pseudo) {
+        if (lobby && user && lobby.creator === user.pseudo && lobby.status === 'waiting') {
             lobby.selectedGame = gameId;
             io.to(lobby.id).emit('lobbyUpdated', lobby);
-            io.emit('updateLobbies', lobbies); // Pour l'afficher sur l'accueil si on veut
+            io.emit('updateLobbies', lobbies);
+        }
+    });
+
+    socket.on('startGame', async (lobbyId) => {
+        const lobby = lobbies.find(l => l.id === lobbyId);
+        const user = connectedUsers.get(socket.id);
+        if (lobby && user && lobby.creator === user.pseudo) {
+            // NOUVEAU : On transmet "prisma" pour interroger la BDD
+            if (lobby.selectedGame === 'quiz') await quizGame.startQuizGame(io, lobbies, lobby, prisma);
+        }
+    });
+
+    socket.on('submitAnswer', ({ lobbyId, answer }) => {
+        const lobby = lobbies.find(l => l.id === lobbyId);
+        if (lobby && lobby.status === 'playing') {
+            if (lobby.selectedGame === 'quiz') quizGame.handleAnswer(io, lobbies, lobby, socket.id, answer);
+        }
+    });
+
+    socket.on('sendMessage', (text) => {
+        const user = connectedUsers.get(socket.id);
+        if (user && text.trim() !== '') {
+            io.emit('receiveMessage', {
+                id: Date.now() + Math.random(), pseudo: user.pseudo, avatar: user.avatar,
+                text: text, time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+            });
         }
     });
 
@@ -133,9 +143,7 @@ io.on('connection', (socket) => {
         const sender = connectedUsers.get(socket.id);
         const lobby = lobbies.find(l => l.id === lobbyId);
         if (sender && lobby) {
-            socket.to(targetSocketId).emit('receiveInvite', {
-                lobbyId: lobby.id, lobbyName: lobby.name, senderName: sender.pseudo
-            });
+            socket.to(targetSocketId).emit('receiveInvite', { lobbyId: lobby.id, lobbyName: lobby.name, senderName: sender.pseudo });
         }
     });
 
@@ -146,10 +154,7 @@ io.on('connection', (socket) => {
             io.emit('updateUserList', Array.from(connectedUsers.values()));
             lobbies.forEach(lobby => {
                 const p = lobby.players.find(pl => pl.socketId === socket.id);
-                if (p) {
-                    p.avatar = newAvatar;
-                    io.to(lobby.id).emit('lobbyUpdated', lobby);
-                }
+                if (p) { p.avatar = newAvatar; io.to(lobby.id).emit('lobbyUpdated', lobby); }
             });
         }
     });
@@ -165,13 +170,12 @@ io.on('connection', (socket) => {
     });
 });
 
+// --- API ROUTES (Auth) ---
 app.post('/register', async (req, res) => {
     try {
         const { email, pseudo, password } = req.body;
         const hashedPassword = await bcrypt.hash(password, 10);
-        const newUser = await prisma.user.create({
-            data: { email: email.toLowerCase(), pseudo, password: hashedPassword, avatar: '🕹️' }
-        });
+        const newUser = await prisma.user.create({ data: { email: email.toLowerCase(), pseudo, password: hashedPassword, avatar: '🕹️' } });
         res.status(201).json({ user: { id: newUser.id, pseudo: newUser.pseudo, avatar: newUser.avatar } });
     } catch (err) { res.status(500).json({ error: "Erreur DB." }); }
 });
@@ -189,9 +193,7 @@ app.post('/login', async (req, res) => {
 app.post('/api/user/update-avatar', async (req, res) => {
     try {
         const { userId, avatar } = req.body;
-        const updated = await prisma.user.update({
-            where: { id: parseInt(userId) }, data: { avatar }
-        });
+        const updated = await prisma.user.update({ where: { id: parseInt(userId) }, data: { avatar } });
         res.json({ avatar: updated.avatar });
     } catch (err) { res.status(500).json({ error: "Erreur mise à jour." }); }
 });
