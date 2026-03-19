@@ -24,6 +24,7 @@ io.on('connection', (socket) => {
         onlineUsers.push({ ...userData, socketId: socket.id });
         io.emit('update_user_list', onlineUsers);
     });
+
     socket.on('disconnect', () => {
         onlineUsers = onlineUsers.filter(u => u.socketId !== socket.id);
         io.emit('update_user_list', onlineUsers);
@@ -38,7 +39,9 @@ app.post('/register', async (req, res) => {
             data: { email, pseudo, password: hashedPassword, birthDate: new Date(birthDate), avatar: avatar || '👤' }
         });
         res.status(201).json({ user: { pseudo: user.pseudo, avatar: user.avatar } });
-    } catch (e) { res.status(400).json({ error: "Erreur inscription" }); }
+    } catch (e) {
+        res.status(400).json({ error: "Email ou pseudo déjà utilisé" });
+    }
 });
 
 app.post('/login', async (req, res) => {
@@ -46,8 +49,12 @@ app.post('/login', async (req, res) => {
     const user = await prisma.user.findUnique({ where: { email } });
     if (user && await bcrypt.compare(password, user.password)) {
         res.json({ user: { pseudo: user.pseudo, avatar: user.avatar } });
-    } else { res.status(401).json({ error: "Identifiants incorrects" }); }
+    } else {
+        res.status(401).json({ error: "Identifiants incorrects" });
+    }
 });
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, '0.0.0.0', () => console.log(`Serveur sur port ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Serveur actif sur le port ${PORT}`);
+});
