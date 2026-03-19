@@ -31,39 +31,57 @@ function App() {
     const messagesEndRef = useRef(null);
 
     useEffect(() => {
-        if (user) {
+        if (!user) return;
+
+        // Si la socket est déjà prête, on rejoint direct
+        if (socket.connected) {
             socket.emit('joinGame', user);
-
-            socket.on('connect', () => { socket.emit('joinGame', user); });
-
-            socket.on('updateUserList', (list) => setPlayers(list));
-            socket.on('updateLobbies', (lobbyList) => setLobbies(lobbyList));
-
-            socket.on('lobbyJoined', (lobby) => setCurrentLobby(lobby));
-            socket.on('lobbyUpdated', (lobby) => setCurrentLobby(lobby));
-            socket.on('lobbyLeft', () => setCurrentLobby(null));
-            socket.on('roomError', (msg) => alert(msg));
-
-            socket.on('receiveInvite', (data) => setInvite(data));
-            socket.on('receiveMessage', (newMsg) => setMessages((prev) => [...prev, newMsg]));
-
-            socket.on('gameStarted', (lobby) => setCurrentLobby(lobby));
-            socket.on('roundResult', (lobby) => setCurrentLobby(lobby));
-            socket.on('nextQuestion', (lobby) => setCurrentLobby(lobby));
-            socket.on('gameOver', (lobby) => {
-                setCurrentLobby(lobby);
-                alert("La partie est terminée ! Regardez le classement final.");
-            });
-
-            socket.on('forceDisconnect', (msg) => {
-                alert(msg);
-                localStorage.clear();
-                window.location.reload();
-            });
         }
 
-        return () => socket.off();
-    }, [user]);
+        const onConnect = () => socket.emit('joinGame', user);
+
+        socket.on('connect', onConnect);
+        socket.on('updateUserList', (list) => setPlayers(list));
+        socket.on('updateLobbies', (lobbyList) => setLobbies(lobbyList));
+        socket.on('lobbyJoined', (lobby) => setCurrentLobby(lobby));
+        socket.on('lobbyUpdated', (lobby) => setCurrentLobby(lobby));
+        socket.on('lobbyLeft', () => setCurrentLobby(null));
+        socket.on('roomError', (msg) => alert(msg));
+        socket.on('receiveInvite', (data) => setInvite(data));
+        socket.on('receiveMessage', (newMsg) => setMessages((prev) => [...prev, newMsg]));
+        socket.on('gameStarted', (lobby) => setCurrentLobby(lobby));
+        socket.on('roundResult', (lobby) => setCurrentLobby(lobby));
+        socket.on('nextQuestion', (lobby) => setCurrentLobby(lobby));
+
+        socket.on('gameOver', (lobby) => {
+            setCurrentLobby(lobby);
+            alert("La partie est terminée ! Regardez le classement final.");
+        });
+
+        socket.on('forceDisconnect', (msg) => {
+            alert(msg);
+            localStorage.clear();
+            window.location.reload();
+        });
+
+        return () => {
+            socket.off('connect', onConnect);
+            socket.off('updateUserList');
+            socket.off('updateLobbies');
+            socket.off('lobbyJoined');
+            socket.off('lobbyUpdated');
+            socket.off('lobbyLeft');
+            socket.off('roomError');
+            socket.off('receiveInvite');
+            socket.off('receiveMessage');
+            socket.off('gameStarted');
+            socket.off('roundResult');
+            socket.off('nextQuestion');
+            socket.off('gameOver');
+            socket.off('forceDisconnect');
+        };
+        // 🔥 L'ASTUCE EST ICI : on utilise user?.id pour ne pas re-déclencher la connexion
+    }, [user?.id]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -142,7 +160,6 @@ function App() {
                     </h1>
                 </header>
                 {currentLobby.selectedGame === 'quiz' && (
-                    /* 🔥 CORRECTION ICI : On passe la variable user ! */
                     <QuizGame currentLobby={currentLobby} socket={socket} user={user} />
                 )}
             </div>

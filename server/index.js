@@ -15,7 +15,7 @@ const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } 
 app.use(cors());
 app.use(express.json());
 
-app.get('/', (req, res) => res.status(200).send("✅ Backend CyberLobby (Reconnexion Intelligente) en ligne !"));
+app.get('/', (req, res) => res.status(200).send("✅ Backend CyberLobby (Reconnexion F5) en ligne !"));
 
 let connectedUsers = new Map();
 let userSockets = new Map();
@@ -37,7 +37,7 @@ function leaveCurrentLobby(socketId) {
                 lobbies.splice(index, 1);
             } else {
                 if (lobby.creator === user.pseudo && lobby.players.length > 0) {
-                    lobby.creator = lobby.players[0].pseudo; // Passe le lead au suivant
+                    lobby.creator = lobby.players[0].pseudo;
                 }
                 if (lobby.status === 'playing' && lobby.selectedGame === 'quiz') {
                     quizGame.handleDisconnection(io, lobbies, lobby);
@@ -52,24 +52,30 @@ function leaveCurrentLobby(socketId) {
 io.on('connection', (socket) => {
 
     socket.on('joinGame', (userData) => {
-        // --- RECONNEXION INTELLIGENTE ---
         if (userSockets.has(userData.id)) {
             const oldSocketId = userSockets.get(userData.id);
+
+            // Si c'est exactement la même connexion qui renvoie l'event (bug React), on ignore
+            if (oldSocketId === socket.id) return;
+
             const activeLobby = lobbies.find(l => l.players.some(p => p.id === userData.id));
 
             if (activeLobby) {
-                // Le joueur était en jeu ! On met à jour son socket sans casser la partie
+                // Le joueur rafraîchit pendant qu'il était dans un salon
                 const player = activeLobby.players.find(p => p.id === userData.id);
                 player.socketId = socket.id;
-                connectedUsers.delete(oldSocketId);
+
+                const oldSocket = io.sockets.sockets.get(oldSocketId);
+                if (oldSocket) oldSocket.leave(activeLobby.id);
                 socket.join(activeLobby.id);
+
+                connectedUsers.delete(oldSocketId);
                 socket.emit('lobbyJoined', activeLobby);
             } else {
-                // Pas en jeu, on nettoie proprement
+                // S'il n'était pas en jeu, on déconnecte le fantôme précédent
                 io.to(oldSocketId).emit('forceDisconnect', "Double connexion détectée.");
                 leaveCurrentLobby(oldSocketId);
                 connectedUsers.delete(oldSocketId);
-                socket.emit('lobbyLeft');
             }
         }
 
@@ -139,7 +145,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // --- NOUVEAU : BOUTON DE SECOURS POUR L'HÔTE ---
     socket.on('forceNextRound', (lobbyId) => {
         const lobby = lobbies.find(l => l.id === lobbyId);
         const user = connectedUsers.get(socket.id);
@@ -178,18 +183,24 @@ io.on('connection', (socket) => {
         }
     });
 
+    // 🔥 NOUVEAU : DÉLAI DE GRÂCE AU RAFRAÎCHISSEMENT
     socket.on('disconnect', () => {
         const user = connectedUsers.get(socket.id);
         if (user) {
-            userSockets.delete(user.id);
-            leaveCurrentLobby(socket.id);
-            connectedUsers.delete(socket.id);
-            io.emit('updateUserList', Array.from(connectedUsers.values()));
+            // On laisse 3 secondes au joueur pour revenir
+            setTimeout(() => {
+                // Si l'ID mémorisé est TOUJOURS celui qui vient de se déconnecter, c'est qu'il n'est pas revenu
+                if (userSockets.get(user.id) === socket.id) {
+                    userSockets.delete(user.id);
+                    leaveCurrentLobby(socket.id);
+                    connectedUsers.delete(socket.id);
+                    io.emit('updateUserList', Array.from(connectedUsers.values()));
+                }
+            }, 3000); // 3000 millisecondes
         }
     });
 });
 
-// ... (Garde tes routes API /register, /login, /api/user/update-avatar identiques ici) ...
 app.post('/register', async (req, res) => { try { const { email, pseudo, password } = req.body; const hashedPassword = await bcrypt.hash(password, 10); const newUser = await prisma.user.create({ data: { email: email.toLowerCase(), pseudo, password: hashedPassword, avatar: '🕹️' } }); res.status(201).json({ user: { id: newUser.id, pseudo: newUser.pseudo, avatar: newUser.avatar } }); } catch (err) { res.status(500).json({ error: "Erreur DB." }); } });
 app.post('/login', async (req, res) => { try { const { email, password } = req.body; const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } }); if (user && await bcrypt.compare(password, user.password)) { res.json({ user: { id: user.id, pseudo: user.pseudo, avatar: user.avatar } }); } else { res.status(401).json({ error: "Identifiants incorrects." }); } } catch (err) { res.status(500).json({ error: "Erreur serveur." }); } });
 app.post('/api/user/update-avatar', async (req, res) => { try { const { userId, avatar } = req.body; const updated = await prisma.user.update({ where: { id: parseInt(userId) }, data: { avatar } }); res.json({ avatar: updated.avatar }); } catch (err) { res.status(500).json({ error: "Erreur mise à jour." }); } });
