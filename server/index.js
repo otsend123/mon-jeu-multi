@@ -1,11 +1,9 @@
-// server/index.js
 const express = require('express');
 const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
 const http = require('http');
 const { Server } = require("socket.io");
-
 const quizGame = require('./games/quiz.js');
 
 const app = express();
@@ -17,7 +15,7 @@ const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } 
 app.use(cors());
 app.use(express.json());
 
-app.get('/', (req, res) => res.status(200).send("✅ Backend CyberLobby en ligne !"));
+app.get('/', (req, res) => res.status(200).send("✅ Backend CyberLobby (Reconnexion Intelligente) en ligne !"));
 
 let connectedUsers = new Map();
 let userSockets = new Map();
@@ -39,10 +37,10 @@ function leaveCurrentLobby(socketId) {
                 lobbies.splice(index, 1);
             } else {
                 if (lobby.creator === user.pseudo && lobby.players.length > 0) {
-                    lobby.creator = lobby.players[0].pseudo;
+                    lobby.creator = lobby.players[0].pseudo; // Passe le lead au suivant
                 }
-                if (lobby.status === 'playing') {
-                    if (lobby.selectedGame === 'quiz') quizGame.handleDisconnection(io, lobbies, lobby);
+                if (lobby.status === 'playing' && lobby.selectedGame === 'quiz') {
+                    quizGame.handleDisconnection(io, lobbies, lobby);
                 }
                 io.to(lobby.id).emit('lobbyUpdated', lobby);
             }
@@ -54,16 +52,32 @@ function leaveCurrentLobby(socketId) {
 io.on('connection', (socket) => {
 
     socket.on('joinGame', (userData) => {
+        // --- RECONNEXION INTELLIGENTE ---
         if (userSockets.has(userData.id)) {
             const oldSocketId = userSockets.get(userData.id);
-            io.to(oldSocketId).emit('forceDisconnect', "Ce compte a été connecté depuis un autre appareil.");
-            leaveCurrentLobby(oldSocketId);
-            connectedUsers.delete(oldSocketId);
+            const activeLobby = lobbies.find(l => l.players.some(p => p.id === userData.id));
+
+            if (activeLobby) {
+                // Le joueur était en jeu ! On met à jour son socket sans casser la partie
+                const player = activeLobby.players.find(p => p.id === userData.id);
+                player.socketId = socket.id;
+                connectedUsers.delete(oldSocketId);
+                socket.join(activeLobby.id);
+                socket.emit('lobbyJoined', activeLobby);
+            } else {
+                // Pas en jeu, on nettoie proprement
+                io.to(oldSocketId).emit('forceDisconnect', "Double connexion détectée.");
+                leaveCurrentLobby(oldSocketId);
+                connectedUsers.delete(oldSocketId);
+                socket.emit('lobbyLeft');
+            }
         }
+
         userSockets.set(userData.id, socket.id);
         connectedUsers.set(socket.id, {
             socketId: socket.id, id: userData.id, pseudo: userData.pseudo, avatar: userData.avatar || '👤'
         });
+
         io.emit('updateUserList', Array.from(connectedUsers.values()));
         socket.emit('updateLobbies', lobbies);
     });
@@ -87,8 +101,8 @@ io.on('connection', (socket) => {
         const user = connectedUsers.get(socket.id);
         const lobby = lobbies.find(l => l.id === lobbyId);
         if (user && lobby) {
-            if (lobby.players.length >= 8) return socket.emit('roomError', "Ce salon est plein (8/8).");
-            if (lobby.status === 'playing') return socket.emit('roomError', "Une partie est déjà en cours dans ce salon.");
+            if (lobby.players.length >= 8) return socket.emit('roomError', "Salon plein (8/8).");
+            if (lobby.status === 'playing') return socket.emit('roomError', "Partie en cours.");
             leaveCurrentLobby(socket.id);
             lobby.players.push(user);
             socket.join(lobby.id);
@@ -98,10 +112,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('leaveLobby', () => {
-        leaveCurrentLobby(socket.id);
-        socket.emit('lobbyLeft');
-    });
+    socket.on('leaveLobby', () => { leaveCurrentLobby(socket.id); socket.emit('lobbyLeft'); });
 
     socket.on('selectGame', ({ lobbyId, gameId }) => {
         const lobby = lobbies.find(l => l.id === lobbyId);
@@ -117,15 +128,23 @@ io.on('connection', (socket) => {
         const lobby = lobbies.find(l => l.id === lobbyId);
         const user = connectedUsers.get(socket.id);
         if (lobby && user && lobby.creator === user.pseudo) {
-            // NOUVEAU : On transmet "prisma" pour interroger la BDD
             if (lobby.selectedGame === 'quiz') await quizGame.startQuizGame(io, lobbies, lobby, prisma);
         }
     });
 
     socket.on('submitAnswer', ({ lobbyId, answer }) => {
         const lobby = lobbies.find(l => l.id === lobbyId);
-        if (lobby && lobby.status === 'playing') {
-            if (lobby.selectedGame === 'quiz') quizGame.handleAnswer(io, lobbies, lobby, socket.id, answer);
+        if (lobby && lobby.status === 'playing' && lobby.selectedGame === 'quiz') {
+            quizGame.handleAnswer(io, lobbies, lobby, socket.id, answer);
+        }
+    });
+
+    // --- NOUVEAU : BOUTON DE SECOURS POUR L'HÔTE ---
+    socket.on('forceNextRound', (lobbyId) => {
+        const lobby = lobbies.find(l => l.id === lobbyId);
+        const user = connectedUsers.get(socket.id);
+        if (lobby && user && lobby.creator === user.pseudo && lobby.status === 'playing') {
+            if (lobby.selectedGame === 'quiz') quizGame.forceNext(io, lobbies, lobby);
         }
     });
 
@@ -170,33 +189,10 @@ io.on('connection', (socket) => {
     });
 });
 
-// --- API ROUTES (Auth) ---
-app.post('/register', async (req, res) => {
-    try {
-        const { email, pseudo, password } = req.body;
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const newUser = await prisma.user.create({ data: { email: email.toLowerCase(), pseudo, password: hashedPassword, avatar: '🕹️' } });
-        res.status(201).json({ user: { id: newUser.id, pseudo: newUser.pseudo, avatar: newUser.avatar } });
-    } catch (err) { res.status(500).json({ error: "Erreur DB." }); }
-});
-
-app.post('/login', async (req, res) => {
-    try {
-        const { email, password } = req.body;
-        const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-        if (user && await bcrypt.compare(password, user.password)) {
-            res.json({ user: { id: user.id, pseudo: user.pseudo, avatar: user.avatar } });
-        } else { res.status(401).json({ error: "Identifiants incorrects." }); }
-    } catch (err) { res.status(500).json({ error: "Erreur serveur." }); }
-});
-
-app.post('/api/user/update-avatar', async (req, res) => {
-    try {
-        const { userId, avatar } = req.body;
-        const updated = await prisma.user.update({ where: { id: parseInt(userId) }, data: { avatar } });
-        res.json({ avatar: updated.avatar });
-    } catch (err) { res.status(500).json({ error: "Erreur mise à jour." }); }
-});
+// ... (Garde tes routes API /register, /login, /api/user/update-avatar identiques ici) ...
+app.post('/register', async (req, res) => { try { const { email, pseudo, password } = req.body; const hashedPassword = await bcrypt.hash(password, 10); const newUser = await prisma.user.create({ data: { email: email.toLowerCase(), pseudo, password: hashedPassword, avatar: '🕹️' } }); res.status(201).json({ user: { id: newUser.id, pseudo: newUser.pseudo, avatar: newUser.avatar } }); } catch (err) { res.status(500).json({ error: "Erreur DB." }); } });
+app.post('/login', async (req, res) => { try { const { email, password } = req.body; const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } }); if (user && await bcrypt.compare(password, user.password)) { res.json({ user: { id: user.id, pseudo: user.pseudo, avatar: user.avatar } }); } else { res.status(401).json({ error: "Identifiants incorrects." }); } } catch (err) { res.status(500).json({ error: "Erreur serveur." }); } });
+app.post('/api/user/update-avatar', async (req, res) => { try { const { userId, avatar } = req.body; const updated = await prisma.user.update({ where: { id: parseInt(userId) }, data: { avatar } }); res.json({ avatar: updated.avatar }); } catch (err) { res.status(500).json({ error: "Erreur mise à jour." }); } });
 
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Serveur en ligne sur le port ${PORT}`));

@@ -1,35 +1,18 @@
-// server/games/quiz.js
-
 async function startQuizGame(io, lobbies, lobby, prisma) {
     try {
-        // Récupération de toutes les questions en BDD
         const allQuestions = await prisma.question.findMany();
+        if (allQuestions.length === 0) return io.to(lobby.id).emit('roomError', "Aucune question en base !");
 
-        if (allQuestions.length === 0) {
-            io.to(lobby.id).emit('roomError', "Aucune question disponible en base de données !");
-            return;
-        }
-
-        // Sélection aléatoire de 5 questions
         const selectedQuestions = allQuestions.sort(() => 0.5 - Math.random()).slice(0, 5);
-
         lobby.status = 'playing';
         lobby.gameState = {
-            questions: selectedQuestions,
-            currentQuestionIndex: 0,
-            scores: {},
-            answersThisRound: {},
-            roundStatus: 'question' // 'question' ou 'result'
+            questions: selectedQuestions, currentQuestionIndex: 0,
+            scores: {}, answersThisRound: {}, roundStatus: 'question'
         };
-
-        // Initialisation des scores à 0
         lobby.players.forEach(p => lobby.gameState.scores[p.socketId] = 0);
-
         io.to(lobby.id).emit('gameStarted', lobby);
         io.emit('updateLobbies', lobbies);
-    } catch (error) {
-        console.error("Erreur lors du lancement du Quiz :", error);
-    }
+    } catch (error) { console.error("Erreur Quiz:", error); }
 }
 
 function handleAnswer(io, lobbies, lobby, socketId, answer) {
@@ -42,17 +25,23 @@ function handleAnswer(io, lobbies, lobby, socketId, answer) {
     }
 }
 
-function checkRoundEnd(io, lobbies, lobby) {
+// NOUVEAU paramètre "force" pour le bouton du chef
+function checkRoundEnd(io, lobbies, lobby, force = false) {
+    if (lobby.status !== 'playing' || lobby.gameState.roundStatus !== 'question') return;
+
     const answeredCount = Object.keys(lobby.gameState.answersThisRound).length;
 
-    if (answeredCount >= lobby.players.length && lobby.players.length > 0) {
+    // On ne compte QUE les joueurs réellement connectés en direct au serveur
+    const activePlayersCount = lobby.players.filter(p => io.sockets.sockets.has(p.socketId)).length;
+    const targetCount = activePlayersCount > 0 ? activePlayersCount : 1;
+
+    // Si on force ou si tout le monde a répondu
+    if (force || answeredCount >= targetCount) {
         lobby.gameState.roundStatus = 'result';
         const currentQ = lobby.gameState.questions[lobby.gameState.currentQuestionIndex];
 
         for (const [sId, ans] of Object.entries(lobby.gameState.answersThisRound)) {
-            if (ans === currentQ.correct) {
-                lobby.gameState.scores[sId] += 10;
-            }
+            if (ans === currentQ.correct) lobby.gameState.scores[sId] += 10;
         }
 
         io.to(lobby.id).emit('roundResult', lobby);
@@ -72,4 +61,12 @@ function checkRoundEnd(io, lobbies, lobby) {
     }
 }
 
-module.exports = { startQuizGame, handleAnswer };
+function handleDisconnection(io, lobbies, lobby) {
+    checkRoundEnd(io, lobbies, lobby);
+}
+
+function forceNext(io, lobbies, lobby) {
+    checkRoundEnd(io, lobbies, lobby, true);
+}
+
+module.exports = { startQuizGame, handleAnswer, handleDisconnection, forceNext };

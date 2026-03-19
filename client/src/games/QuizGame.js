@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
 
-function QuizGame({ currentLobby, socket }) {
+function QuizGame({ currentLobby, socket, user }) { // Réception du 'user'
     const [hasAnswered, setHasAnswered] = useState(false);
-    const [enlargedImage, setEnlargedImage] = useState(null); // NOUVEAU : Gère l'image agrandie
+    const [enlargedImage, setEnlargedImage] = useState(null);
 
-    // Récupération de l'état du jeu depuis le serveur
     const gs = currentLobby.gameState;
     const currentQ = gs.questions[gs.currentQuestionIndex];
-
-    // Tri des joueurs par score
     const sortedPlayers = [...currentLobby.players].sort((a, b) => (gs.scores[b.socketId] || 0) - (gs.scores[a.socketId] || 0));
 
-    // Réinitialise le bouton "Répondre" et ferme l'image au changement de question
+    // Variables pour l'interface d'attente
+    const answeredCount = Object.keys(gs.answersThisRound || {}).length;
+    const isHost = currentLobby.creator === user.pseudo;
+
     useEffect(() => {
         setHasAnswered(false);
         setEnlargedImage(null);
@@ -26,7 +26,6 @@ function QuizGame({ currentLobby, socket }) {
 
     return (
         <main className="game-dashboard">
-            {/* ZONE GAUCHE : LE JEU */}
             <div className="game-play-area">
                 {gs.roundStatus === 'question' ? (
                     <>
@@ -38,7 +37,7 @@ function QuizGame({ currentLobby, socket }) {
                                     src={`/${imgSrc}`}
                                     alt={`Indice ${i+1}`}
                                     className="quiz-img clickable-img"
-                                    onClick={() => setEnlargedImage(imgSrc)} // NOUVEAU : Clic pour agrandir
+                                    onClick={() => setEnlargedImage(imgSrc)}
                                 />
                             ))}
                         </div>
@@ -54,7 +53,23 @@ function QuizGame({ currentLobby, socket }) {
                                 </button>
                             ))}
                         </div>
-                        {hasAnswered && <p className="waiting-text">En attente des autres joueurs...</p>}
+
+                        {/* --- INTERFACE D'ATTENTE SÉCURISÉE --- */}
+                        {hasAnswered && (
+                            <div style={{marginTop: '20px'}}>
+                                <p className="waiting-text">En attente des autres joueurs ({answeredCount}/{currentLobby.players.length})...</p>
+
+                                {isHost && (
+                                    <button
+                                        className="btn-cyber btn-small"
+                                        style={{backgroundColor: '#ff2e63', border: 'none', marginTop: '10px'}}
+                                        onClick={() => socket.emit('forceNextRound', currentLobby.id)}
+                                    >
+                                        Forcer le résultat ⚡
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </>
                 ) : (
                     <div className="result-area">
@@ -67,7 +82,6 @@ function QuizGame({ currentLobby, socket }) {
                 )}
             </div>
 
-            {/* ZONE DROITE : CLASSEMENT */}
             <div className="game-scoreboard">
                 <h2>Classement</h2>
                 {sortedPlayers.map((p, idx) => (
@@ -80,7 +94,6 @@ function QuizGame({ currentLobby, socket }) {
                 ))}
             </div>
 
-            {/* NOUVEAU : OVERLAY POUR L'IMAGE AGRANDIE */}
             {enlargedImage && (
                 <div className="image-zoom-overlay" onClick={() => setEnlargedImage(null)}>
                     <img src={`/${enlargedImage}`} alt="Zoom" className="enlarged-img" />
