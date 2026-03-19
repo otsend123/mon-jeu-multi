@@ -1,5 +1,3 @@
-// server/prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -19,11 +17,11 @@ model User {
   createdAt DateTime @default(now())
 }
 
-// NOUVELLE TABLE POUR LE QUIZ
+// Table pour stocker les questions du quiz
 model Question {
   id        Int      @id @default(autoincrement())
   images    String[] // Exemple: ["img/1a.jpg", "img/1b.jpg", "img/1c.jpg"]
   options   String[] // Exemple: ["Femme trans", "Femme cis", "Autre"]
-  correct   String   // Exemple: "Femme trans"
+  correct   String
   createdAt DateTime @default(now())
 }

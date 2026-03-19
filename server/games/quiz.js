@@ -1,18 +1,16 @@
 // server/games/quiz.js
 
-// Lancement du jeu ASYNCHRONE pour interroger la BDD
 async function startQuizGame(io, lobbies, lobby, prisma) {
-
     try {
-        // 1. Récupérer toutes les questions depuis la base de données
+        // Récupération des questions depuis la BDD
         const allQuestions = await prisma.question.findMany();
 
         if (allQuestions.length === 0) {
-            io.to(lobby.id).emit('roomError', "Aucune question trouvée dans la base de données !");
+            io.to(lobby.id).emit('roomError', "Aucune question en base !");
             return;
         }
 
-        // 2. Mélanger et en garder 5 (ou plus)
+        // Sélection de 5 questions aléatoires
         const selectedQuestions = allQuestions.sort(() => 0.5 - Math.random()).slice(0, 5);
 
         lobby.status = 'playing';
@@ -21,22 +19,19 @@ async function startQuizGame(io, lobbies, lobby, prisma) {
             currentQuestionIndex: 0,
             scores: {},
             answersThisRound: {},
-            roundStatus: 'question' // 'question' ou 'result'
+            roundStatus: 'question'
         };
 
-        // Initialiser les scores à 0
+        // Initialisation des scores
         lobby.players.forEach(p => lobby.gameState.scores[p.socketId] = 0);
 
         io.to(lobby.id).emit('gameStarted', lobby);
         io.emit('updateLobbies', lobbies);
-
     } catch (error) {
-        console.error("Erreur lors de la récupération des questions :", error);
-        io.to(lobby.id).emit('roomError', "Erreur interne du serveur lors du chargement du quiz.");
+        console.error("Erreur Quiz:", error);
     }
 }
 
-// Gestion des réponses
 function handleAnswer(io, lobbies, lobby, socketId, answer) {
     if (lobby.status === 'playing' && lobby.gameState.roundStatus === 'question') {
         if (!lobby.gameState.answersThisRound[socketId]) {
@@ -47,10 +42,7 @@ function handleAnswer(io, lobbies, lobby, socketId, answer) {
     }
 }
 
-// Vérification de la fin du tour
 function checkRoundEnd(io, lobbies, lobby) {
-    if (lobby.status !== 'playing' || lobby.gameState.roundStatus !== 'question') return;
-
     const answeredCount = Object.keys(lobby.gameState.answersThisRound).length;
 
     if (answeredCount >= lobby.players.length && lobby.players.length > 0) {
@@ -80,8 +72,4 @@ function checkRoundEnd(io, lobbies, lobby) {
     }
 }
 
-function handleDisconnection(io, lobbies, lobby) {
-    checkRoundEnd(io, lobbies, lobby);
-}
-
-module.exports = { startQuizGame, handleAnswer, handleDisconnection };
+module.exports = { startQuizGame, handleAnswer };
