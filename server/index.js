@@ -9,18 +9,15 @@ const app = express();
 const server = http.createServer(app);
 const prisma = new PrismaClient();
 
-// Configuration Socket.IO robuste
+// Configuration Socket.IO
 const io = new Server(server, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
-    }
+    cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
 app.use(cors());
 app.use(express.json());
 
-// --- GESTION TEMPS RÉEL ---
+// --- TEMPS RÉEL ---
 let connectedUsers = new Map();
 
 io.on('connection', (socket) => {
@@ -47,21 +44,19 @@ io.on('connection', (socket) => {
     });
 });
 
-// --- ROUTES API ---
+// --- API ROUTES ---
 
 app.post('/register', async (req, res) => {
     try {
         const { email, pseudo, password } = req.body;
-        if (!email || !pseudo || !password) return res.status(400).json({ error: "Champs manquants" });
-
         const hashedPassword = await bcrypt.hash(password, 10);
         const newUser = await prisma.user.create({
             data: { email: email.toLowerCase(), pseudo, password: hashedPassword, avatar: '🕹️' }
         });
         res.status(201).json({ user: { id: newUser.id, pseudo: newUser.pseudo, avatar: newUser.avatar } });
-    } catch (error) {
-        console.error("Erreur Inscription:", error);
-        res.status(500).json({ error: "Erreur DB : Vérifiez si l'email existe déjà" });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "L'email ou le pseudo est déjà utilisé." });
     }
 });
 
@@ -70,27 +65,23 @@ app.post('/login', async (req, res) => {
         const { email, password } = req.body;
         const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
         if (user && await bcrypt.compare(password, user.password)) {
-            res.status(200).json({ user: { id: user.id, pseudo: user.pseudo, avatar: user.avatar } });
+            res.json({ user: { id: user.id, pseudo: user.pseudo, avatar: user.avatar } });
         } else {
             res.status(401).json({ error: "Identifiants incorrects" });
         }
-    } catch (error) {
-        res.status(500).json({ error: "Erreur serveur login" });
-    }
+    } catch (err) { res.status(500).json({ error: "Erreur serveur" }); }
 });
 
 app.post('/api/user/update-avatar', async (req, res) => {
     try {
         const { userId, avatar } = req.body;
-        const updatedUser = await prisma.user.update({
+        const updated = await prisma.user.update({
             where: { id: parseInt(userId) },
             data: { avatar }
         });
-        res.status(200).json({ avatar: updatedUser.avatar });
-    } catch (error) {
-        res.status(500).json({ error: "Erreur mise à jour" });
-    }
+        res.json({ avatar: updated.avatar });
+    } catch (err) { res.status(500).json({ error: "Erreur mise à jour" }); }
 });
 
 const PORT = process.env.PORT || 8080;
-server.listen(PORT, () => console.log(`🚀 Serveur actif sur le port ${PORT}`));
+server.listen(PORT, () => console.log(`🚀 Serveur prêt sur le port ${PORT}`));

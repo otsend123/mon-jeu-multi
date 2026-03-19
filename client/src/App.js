@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
 import './App.css';
 
-// URL EXACT DE TON BACKEND RAILWAY
+// ⚠️ VERIFIE CETTE URL DANS TON DASHBOARD RAILWAY
 const API_URL = "https://scintillating-inspiration-production.up.railway.app";
 const socket = io(API_URL);
 const AVATARS = ['🕹️', '👽', '🤖', '👻', '👾', '👨‍🚀', '🐱', '🐲', '🐼', '🦊'];
@@ -25,7 +25,7 @@ function App() {
 
     const handleAuth = async (e) => {
         e.preventDefault();
-        setError('');
+        setError('Connexion en cours...');
         const path = isLogin ? '/login' : '/register';
         try {
             const res = await fetch(`${API_URL}${path}`, {
@@ -37,11 +37,12 @@ function App() {
             if (res.ok) {
                 localStorage.setItem('user', JSON.stringify(data.user));
                 setUser(data.user);
+                setError('');
             } else {
                 setError(data.error);
             }
         } catch (err) {
-            setError("Serveur injoignable. Vérifie que le backend tourne sur Railway.");
+            setError("Impossible de joindre le serveur. Vérifie Railway.");
         }
     };
 
@@ -60,7 +61,6 @@ function App() {
         }
     };
 
-    // --- RENDU AUTHENTIFICATION ---
     if (!user) {
         return (
             <div className="auth-container">
@@ -74,29 +74,29 @@ function App() {
                            onChange={e => setForm({...form, email: e.target.value})} />
                     <input type="password" placeholder="Mot de passe" required
                            onChange={e => setForm({...form, password: e.target.value})} />
-                    <button type="submit" className="btn-cyber">{isLogin ? 'Entrer' : 'Créer compte'}</button>
+                    <button type="submit" className="btn-cyber">{isLogin ? 'Entrer' : 'S\'inscrire'}</button>
                 </form>
-                {error && <p className="error-msg">{error}</p>}
-                <p className="toggle-auth" onClick={() => setIsLogin(!isLogin)}>
+                {error && <p className="error-msg" style={{color: '#ff2e63', marginTop: '10px'}}>{error}</p>}
+                <p className="toggle-auth" onClick={() => setIsLogin(!isLogin)} style={{cursor:'pointer', marginTop:'15px'}}>
                     {isLogin ? "Pas de compte ? S'inscrire" : "Déjà inscrit ? Connexion"}
                 </p>
             </div>
         );
     }
 
-    // --- RENDU LOBBY ---
     return (
         <div className="App">
             <header className="header-cyber">
-                <h1 className="title-cyber">LOBBY</h1>
+                <h1 className="title-cyber">CYBER LOBBY</h1>
                 <div className="user-profile-btn" onClick={() => setShowModal(true)}>
                     <div className="header-avatar">{user.avatar}</div>
                     <span>{user.pseudo}</span>
                 </div>
+                <button className="btn-disconnect" onClick={() => {localStorage.clear(); window.location.reload();}}>Déconnexion</button>
             </header>
 
             <main className="lobby-content">
-                <h2 className="online-title">En ligne ({players.length})</h2>
+                <h2 className="online-title">Joueurs en ligne ({players.length})</h2>
                 <div className="player-grid">
                     {players.map(p => (
                         <div key={p.id} className="player-card">
@@ -108,8 +108,8 @@ function App() {
             </main>
 
             {showModal && (
-                <div className="modal-overlay" onClick={() => setShowModal(false)}>
-                    <div className="avatar-modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay">
+                    <div className="avatar-modal">
                         <h2 className="modal-title">Choisir Avatar</h2>
                         <div className="avatar-selection-grid">
                             {AVATARS.map(emoji => (
