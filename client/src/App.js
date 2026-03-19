@@ -1,18 +1,17 @@
-import React, { useState, useEffect } from 'react';
+// src/App.js
+import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
+import QuizGame from './games/QuizGame'; // <-- IMPORTATION DU JEU
 import './App.css';
 
-// ⚠️ URL DE TON BACKEND RAILWAY
 const API_URL = "https://mon-jeu-multi-production-ed0c.up.railway.app";
 const socket = io(API_URL, { transports: ['websocket', 'polling'] });
 
 const AVATARS = ['🕹️', '👽', '🤖', '👻', '👾', '👨‍🚀', '🐱', '🐲', '🐼', '🦊'];
 
-// NOUVEAU : Liste des jeux disponibles
 const AVAILABLE_GAMES = [
-    { id: 'tictactoe', name: 'Morpion Cyber', icon: '❌' },
-    { id: 'battleship', name: 'Bataille Navale', icon: '🚢' },
-    { id: 'pong', name: 'Néon Pong', icon: '🏓' }
+    { id: 'quiz', name: 'Quiz Image', icon: '📸' },
+    { id: 'tictactoe', name: 'Morpion Cyber', icon: '❌' }
 ];
 
 function App() {
@@ -29,6 +28,10 @@ function App() {
     const [currentLobby, setCurrentLobby] = useState(null);
     const [invite, setInvite] = useState(null);
 
+    const [messages, setMessages] = useState([]);
+    const [currentMsg, setCurrentMsg] = useState('');
+    const messagesEndRef = useRef(null);
+
     useEffect(() => {
         if (user) {
             socket.emit('joinGame', user);
@@ -42,6 +45,17 @@ function App() {
             socket.on('roomError', (msg) => alert(msg));
 
             socket.on('receiveInvite', (data) => setInvite(data));
+            socket.on('receiveMessage', (newMsg) => setMessages((prev) => [...prev, newMsg]));
+
+            // Écoutes de jeu global
+            socket.on('gameStarted', (lobby) => setCurrentLobby(lobby));
+            socket.on('roundResult', (lobby) => setCurrentLobby(lobby));
+            socket.on('nextQuestion', (lobby) => setCurrentLobby(lobby));
+            socket.on('gameOver', (lobby) => {
+                setCurrentLobby(lobby);
+                alert("La partie est terminée ! Regardez le classement final.");
+            });
+
             socket.on('forceDisconnect', (msg) => {
                 alert(msg);
                 localStorage.removeItem('user');
@@ -50,30 +64,25 @@ function App() {
         }
 
         return () => {
-            socket.off('updateUserList');
-            socket.off('updateLobbies');
-            socket.off('lobbyJoined');
-            socket.off('lobbyUpdated');
-            socket.off('lobbyLeft');
-            socket.off('roomError');
-            socket.off('receiveInvite');
-            socket.off('forceDisconnect');
+            socket.off('updateUserList'); socket.off('updateLobbies'); socket.off('lobbyJoined');
+            socket.off('lobbyUpdated'); socket.off('lobbyLeft'); socket.off('roomError');
+            socket.off('receiveInvite'); socket.off('receiveMessage'); socket.off('forceDisconnect');
+            socket.off('gameStarted'); socket.off('roundResult'); socket.off('nextQuestion'); socket.off('gameOver');
         };
     }, [user]);
 
+    useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
     const handleAuth = async (e) => {
         e.preventDefault();
-        setError('Tentative de connexion...');
+        setError('Tentative...');
         try {
             const res = await fetch(`${API_URL}${isLogin ? '/login' : '/register'}`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(form)
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form)
             });
             const data = await res.json();
             if (res.ok) {
-                localStorage.setItem('user', JSON.stringify(data.user));
-                setUser(data.user);
-                setError('');
+                localStorage.setItem('user', JSON.stringify(data.user)); setUser(data.user); setError('');
             } else { setError(data.error); }
         } catch (err) { setError("Serveur injoignable."); }
     };
@@ -81,39 +90,13 @@ function App() {
     const updateAvatar = async (emoji) => {
         try {
             const res = await fetch(`${API_URL}/api/user/update-avatar`, {
-                method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ userId: user.id, avatar: emoji })
+                method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user.id, avatar: emoji })
             });
             if (res.ok) {
-                const updated = { ...user, avatar: emoji };
-                setUser(updated);
-                localStorage.setItem('user', JSON.stringify(updated));
-                socket.emit('changeAvatar', emoji);
-                setShowModal(false);
+                const updated = { ...user, avatar: emoji }; setUser(updated);
+                localStorage.setItem('user', JSON.stringify(updated)); socket.emit('changeAvatar', emoji); setShowModal(false);
             }
         } catch (e) { console.error(e); }
-    };
-
-    const handleCreateLobby = (e) => {
-        e.preventDefault();
-        if (newLobbyName.trim() !== '') {
-            socket.emit('createLobby', newLobbyName);
-            setNewLobbyName('');
-        }
-    };
-
-    const handleInvite = (targetSocketId) => {
-        if (currentLobby) {
-            socket.emit('invitePlayer', { targetSocketId, lobbyId: currentLobby.id });
-            alert("Invitation envoyée !");
-        }
-    };
-
-    // NOUVEAU : Fonction pour sélectionner un jeu
-    const handleSelectGame = (gameId) => {
-        if (currentLobby && currentLobby.creator === user.pseudo) {
-            socket.emit('selectGame', { lobbyId: currentLobby.id, gameId });
-        }
     };
 
     if (!user) {
@@ -134,7 +117,29 @@ function App() {
         );
     }
 
-    // --- VUE : SALLE D'ATTENTE (ROOM) ---
+    // --- VUE 3 : ROUTEUR DE JEUX EN COURS ---
+    if (currentLobby && currentLobby.status === 'playing') {
+        const currentQIndex = currentLobby.gameState?.currentQuestionIndex || 0;
+        const totalQ = currentLobby.gameState?.questions?.length || 0;
+
+        return (
+            <div className="App game-mode">
+                <header className="header-cyber">
+                    <h1 className="title-cyber">
+                        {currentLobby.selectedGame === 'quiz' ? `QUIZ - Question ${currentQIndex + 1}/${totalQ}` : currentLobby.name}
+                    </h1>
+                </header>
+
+                {/* On affiche le composant du jeu sélectionné */}
+                {currentLobby.selectedGame === 'quiz' && (
+                    <QuizGame currentLobby={currentLobby} socket={socket} />
+                )}
+                {/* Futur jeu : currentLobby.selectedGame === 'tictactoe' && <TicTacToeGame ... /> */}
+            </div>
+        );
+    }
+
+    // --- VUE 2 : SALLE D'ATTENTE (ROOM) ---
     if (currentLobby) {
         const slots = [...Array(8)].map((_, index) => currentLobby.players[index] || null);
         const isHost = currentLobby.creator === user.pseudo;
@@ -146,96 +151,61 @@ function App() {
                     <h1 className="title-cyber">{currentLobby.name}</h1>
                     <button className="btn-disconnect" onClick={() => socket.emit('leaveLobby')}>🚪 Quitter le salon</button>
                 </header>
-                <main className="main-dashboard">
-                    <div className="dashboard-top">
-                        <section className="panel-section room-section">
-                            <h2 className="panel-title">Équipe ({currentLobby.players.length}/8)</h2>
-                            <div className="slots-grid">
-                                {slots.map((player, idx) => (
-                                    player ? (
-                                        <div key={idx} className="slot-card filled">
-                                            <div className="slot-avatar">{player.avatar}</div>
-                                            <div className="slot-name">{player.pseudo}</div>
-                                            {player.pseudo === currentLobby.creator && <div className="host-badge">👑 Hôte</div>}
-                                        </div>
-                                    ) : (
-                                        <div key={idx} className="slot-card empty">
-                                            <div className="slot-avatar">?</div>
-                                            <div className="slot-name empty-text">Vide</div>
-                                        </div>
-                                    )
-                                ))}
-                            </div>
-
-                            {/* BOUTON LANCER LA PARTIE (Uniquement pour l'Hôte) */}
-                            <div style={{marginTop: '25px', textAlign: 'center'}}>
-                                {isHost ? (
-                                    <button
-                                        className={`btn-cyber ${!currentLobby.selectedGame ? 'btn-disabled' : ''}`}
-                                        style={{width: '250px'}}
-                                        disabled={!currentLobby.selectedGame}
-                                    >
-                                        {currentLobby.selectedGame ? `Lancer ${selectedGameObj.name}` : "Choisissez un jeu"}
-                                    </button>
-                                ) : (
-                                    <p style={{color: '#00d4ff'}}>En attente de l'Hôte...</p>
-                                )}
-                            </div>
-                        </section>
-
-                        <section className="panel-section players-section">
-                            <h2 className="panel-title">Inviter des joueurs</h2>
-                            <div className="table-container">
-                                <table className="players-table">
-                                    <tbody>
-                                    {players.filter(p => p.pseudo !== user.pseudo).map(p => {
-                                        const isInLobby = currentLobby.players.some(lobbyP => lobbyP.pseudo === p.pseudo);
-                                        return (
-                                            <tr key={p.socketId}>
-                                                <td width="50" className="td-center"><span className="player-avatar">{p.avatar}</span></td>
-                                                <td>{p.pseudo}</td>
-                                                <td className="td-center">
-                                                    {isInLobby ? (
-                                                        <span style={{color: '#888'}}>Dans le salon</span>
-                                                    ) : (
-                                                        <button className="btn-join" onClick={() => handleInvite(p.socketId)}>Inviter</button>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </section>
-                    </div>
-
-                    {/* NOUVEAU : SELECTION DU JEU DANS LE SALON */}
-                    <div className="dashboard-bottom">
-                        <section className="panel-section games-section">
-                            <h2 className="panel-title">
-                                Choix du jeu {selectedGameObj && <span style={{color: '#fff'}}>: {selectedGameObj.name}</span>}
-                            </h2>
-                            <div className="games-grid">
-                                {AVAILABLE_GAMES.map(game => (
-                                    <div
-                                        key={game.id}
-                                        className={`game-card ${currentLobby.selectedGame === game.id ? 'selected' : ''} ${!isHost ? 'disabled' : ''}`}
-                                        onClick={() => handleSelectGame(game.id)}
-                                    >
-                                        <div className="game-icon">{game.icon}</div>
-                                        <div className="game-name">{game.name}</div>
+                <main className="main-dashboard dashboard-top">
+                    <section className="panel-section room-section">
+                        <h2 className="panel-title">Équipe ({currentLobby.players.length}/8)</h2>
+                        <div className="slots-grid">
+                            {slots.map((player, idx) => (
+                                player ? (
+                                    <div key={idx} className="slot-card filled">
+                                        <div className="slot-avatar">{player.avatar}</div>
+                                        <div className="slot-name">{player.pseudo}</div>
+                                        {player.pseudo === currentLobby.creator && <div className="host-badge">👑 Hôte</div>}
                                     </div>
-                                ))}
-                            </div>
-                        </section>
-                    </div>
+                                ) : (
+                                    <div key={idx} className="slot-card empty">
+                                        <div className="slot-avatar">?</div>
+                                        <div className="slot-name empty-text">Vide</div>
+                                    </div>
+                                )
+                            ))}
+                        </div>
+                        <div style={{marginTop: '25px', textAlign: 'center'}}>
+                            {isHost ? (
+                                <button
+                                    className={`btn-cyber ${!currentLobby.selectedGame ? 'btn-disabled' : ''}`}
+                                    style={{width: '250px'}}
+                                    disabled={!currentLobby.selectedGame}
+                                    onClick={() => socket.emit('startGame', currentLobby.id)}
+                                >
+                                    {currentLobby.selectedGame ? `Lancer ${selectedGameObj.name}` : "Choisissez un jeu"}
+                                </button>
+                            ) : (
+                                <p style={{color: '#00d4ff'}}>En attente de l'Hôte pour lancer...</p>
+                            )}
+                        </div>
+                    </section>
+                    <section className="panel-section games-section">
+                        <h2 className="panel-title">Choix du jeu</h2>
+                        <div className="games-grid">
+                            {AVAILABLE_GAMES.map(game => (
+                                <div
+                                    key={game.id}
+                                    className={`game-card ${currentLobby.selectedGame === game.id ? 'selected' : ''} ${!isHost ? 'disabled' : ''}`}
+                                    onClick={() => { if(isHost) socket.emit('selectGame', { lobbyId: currentLobby.id, gameId: game.id }); }}
+                                >
+                                    <div className="game-icon">{game.icon}</div>
+                                    <div className="game-name">{game.name}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
                 </main>
             </div>
         );
     }
 
-    // --- VUE : ACCUEIL MULTIJOUEUR ---
+    // --- VUE 1 : ACCUEIL MULTIJOUEUR ---
     return (
         <div className="App">
             <header className="header-cyber">
@@ -261,59 +231,41 @@ function App() {
                 <div className="dashboard-top">
                     <section className="panel-section lobbies-section">
                         <h2 className="panel-title">Salons disponibles</h2>
-                        <form className="create-lobby-form" onSubmit={handleCreateLobby}>
+                        <form className="create-lobby-form" onSubmit={(e) => { e.preventDefault(); if(newLobbyName) { socket.emit('createLobby', newLobbyName); setNewLobbyName(''); } }}>
                             <input type="text" placeholder="Nom du salon..." value={newLobbyName} onChange={(e) => setNewLobbyName(e.target.value)} />
                             <button type="submit" className="btn-cyber btn-small">Créer</button>
                         </form>
                         <div className="lobbies-list">
-                            {lobbies.length === 0 ? (
-                                <p className="empty-text">Aucun salon actif. Créez-en un !</p>
-                            ) : (
-                                lobbies.map(lobby => (
-                                    <div key={lobby.id} className="lobby-card">
-                                        <div className="lobby-info">
-                                            <span className="lobby-name">{lobby.name}</span>
-                                            <span className="lobby-creator">Hôte: {lobby.creator}</span>
-                                        </div>
-                                        <div className="lobby-actions">
-                                            <span className="lobby-count">{lobby.players.length}/8</span>
-                                            <button className="btn-join" onClick={() => socket.emit('joinLobby', lobby.id)}>Rejoindre</button>
-                                        </div>
+                            {lobbies.length === 0 ? <p className="empty-text">Aucun salon actif.</p> : lobbies.map(lobby => (
+                                <div key={lobby.id} className="lobby-card">
+                                    <div className="lobby-info">
+                                        <span className="lobby-name">{lobby.name} {lobby.status === 'playing' ? ' (EN JEU)' : ''}</span>
+                                        <span className="lobby-creator">Hôte: {lobby.creator}</span>
                                     </div>
-                                ))
-                            )}
-                        </div>
-                    </section>
-
-                    <section className="panel-section players-section">
-                        <h2 className="panel-title">Joueurs en ligne ({players.length})</h2>
-                        <div className="table-container">
-                            <table className="players-table">
-                                <tbody>
-                                {players.map(p => (
-                                    <tr key={p.id}>
-                                        <td className="td-center"><span className="player-avatar">{p.avatar}</span></td>
-                                        <td>{p.pseudo}</td>
-                                        <td className="td-center"><span className="status-dot"></span></td>
-                                    </tr>
-                                ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </section>
-                </div>
-
-                {/* CATALOGUE GÉNÉRAL EN BAS */}
-                <div className="dashboard-bottom">
-                    <section className="panel-section games-section">
-                        <h2 className="panel-title">Catalogue des Jeux</h2>
-                        <div className="games-grid">
-                            {AVAILABLE_GAMES.map(game => (
-                                <div key={game.id} className="game-card disabled">
-                                    <div className="game-icon">{game.icon}</div>
-                                    <div className="game-name">{game.name}</div>
+                                    <div className="lobby-actions">
+                                        <span className="lobby-count">{lobby.players.length}/8</span>
+                                        <button className="btn-join" disabled={lobby.status === 'playing'} onClick={() => socket.emit('joinLobby', lobby.id)}>Rejoindre</button>
+                                    </div>
                                 </div>
                             ))}
+                        </div>
+                    </section>
+
+                    <section className="panel-section chat-section">
+                        <h2 className="panel-title">Tchat Global</h2>
+                        <div className="chat-box" style={{height: '350px'}}>
+                            <div className="chat-messages" style={{flex: 1, overflowY: 'auto', padding: '10px'}}>
+                                {messages.map((msg) => (
+                                    <div key={msg.id} style={{marginBottom: '10px'}}>
+                                        <span style={{fontSize:'1.2rem'}}>{msg.avatar}</span> <strong>{msg.pseudo}</strong>: {msg.text}
+                                    </div>
+                                ))}
+                                <div ref={messagesEndRef} />
+                            </div>
+                            <form className="chat-input-area" onSubmit={(e) => { e.preventDefault(); if(currentMsg) { socket.emit('sendMessage', currentMsg); setCurrentMsg(''); }}}>
+                                <input type="text" placeholder="Message..." value={currentMsg} onChange={(e) => setCurrentMsg(e.target.value)} style={{flex: 1}}/>
+                                <button type="submit" className="btn-send">Envoyer</button>
+                            </form>
                         </div>
                     </section>
                 </div>
@@ -324,9 +276,7 @@ function App() {
                     <div className="avatar-modal" onClick={e => e.stopPropagation()}>
                         <h2 className="modal-title">Choisir Avatar</h2>
                         <div className="avatar-selection-grid">
-                            {AVATARS.map(emoji => (
-                                <div key={emoji} className="avatar-opt" onClick={() => updateAvatar(emoji)}>{emoji}</div>
-                            ))}
+                            {AVATARS.map(emoji => <div key={emoji} className="avatar-opt" onClick={() => updateAvatar(emoji)}>{emoji}</div>)}
                         </div>
                         <button className="btn-cyber" onClick={() => setShowModal(false)}>Fermer</button>
                     </div>
