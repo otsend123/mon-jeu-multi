@@ -6,7 +6,6 @@ import './App.css';
 const API_URL = "https://mon-jeu-multi-production-ed0c.up.railway.app";
 const socket = io(API_URL, { transports: ['websocket', 'polling'] });
 
-// Les variables sont maintenant toutes utilisées dans le rendu
 const AVATARS = ['🕹️', '👽', '🤖', '👻', '👾', '👨‍🚀', '🐱', '🐲', '🐼', '🦊'];
 const AVAILABLE_GAMES = [
     { id: 'quiz', name: 'Quiz Image', icon: '📸' },
@@ -27,6 +26,7 @@ function App() {
     const [currentLobby, setCurrentLobby] = useState(null);
     const [invite, setInvite] = useState(null);
 
+    // Variables du Tchat (maintenant utilisées dans l'affichage !)
     const [messages, setMessages] = useState([]);
     const [currentMsg, setCurrentMsg] = useState('');
     const messagesEndRef = useRef(null);
@@ -237,6 +237,7 @@ function App() {
 
             <main className="main-dashboard">
                 <div className="dashboard-top">
+                    {/* Colonne de Gauche : Salons */}
                     <section className="panel-section lobbies-section">
                         <h2 className="panel-title">Salons disponibles</h2>
                         <form className="create-lobby-form" onSubmit={(e) => { e.preventDefault(); if(newLobbyName) { socket.emit('createLobby', newLobbyName); setNewLobbyName(''); } }}>
@@ -259,31 +260,51 @@ function App() {
                         </div>
                     </section>
 
-                    <section className="panel-section players-section">
-                        <h2 className="panel-title">Joueurs en ligne ({players.length})</h2>
-                        <div className="table-container">
-                            <table className="players-table">
-                                <tbody>
-                                {players.map(p => (
-                                    <tr key={p.id}>
-                                        <td className="td-center"><span className="player-avatar">{p.avatar}</span></td>
-                                        <td>{p.pseudo}</td>
-                                        <td className="td-center">
-                                            {/* On utilise handleInvite pour inviter d'autres joueurs (s'ils ne sont pas déjà avec nous) */}
-                                            {p.pseudo !== user.pseudo && (
-                                                <button className="btn-join" onClick={() => socket.emit('invitePlayer', { targetSocketId: p.socketId, lobbyId: currentLobby?.id })}>Inviter</button>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </section>
+                    {/* Colonne de Droite : Joueurs & Tchat */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
+                        <section className="panel-section players-section">
+                            <h2 className="panel-title">Joueurs en ligne ({players.length})</h2>
+                            <div className="table-container" style={{maxHeight: '200px'}}>
+                                <table className="players-table">
+                                    <tbody>
+                                    {players.map(p => (
+                                        <tr key={p.id}>
+                                            <td className="td-center" width="40"><span className="player-avatar">{p.avatar}</span></td>
+                                            <td>{p.pseudo}</td>
+                                            <td className="td-center">
+                                                {p.pseudo !== user.pseudo && (
+                                                    <button className="btn-join" style={{padding: '5px 10px', fontSize: '0.8rem'}} onClick={() => socket.emit('invitePlayer', { targetSocketId: p.socketId, lobbyId: currentLobby?.id })}>Inviter</button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+
+                        <section className="panel-section chat-section">
+                            <h2 className="panel-title">Tchat Global</h2>
+                            <div className="chat-box" style={{height: '250px', display: 'flex', flexDirection: 'column'}}>
+                                <div className="chat-messages" style={{flex: 1, overflowY: 'auto', padding: '10px'}}>
+                                    {messages.map((msg) => (
+                                        <div key={msg.id} style={{marginBottom: '10px'}}>
+                                            <span style={{fontSize:'1.2rem'}}>{msg.avatar}</span> <strong style={{color: '#00d4ff'}}>{msg.pseudo}</strong> <span style={{color: '#fff'}}>{msg.text}</span>
+                                        </div>
+                                    ))}
+                                    <div ref={messagesEndRef} />
+                                </div>
+                                <form className="chat-input-area" onSubmit={(e) => { e.preventDefault(); if(currentMsg) { socket.emit('sendMessage', currentMsg); setCurrentMsg(''); }}}>
+                                    <input type="text" placeholder="Message..." value={currentMsg} onChange={(e) => setCurrentMsg(e.target.value)} style={{flex: 1, padding: '10px'}}/>
+                                    <button type="submit" className="btn-send">Envoyer</button>
+                                </form>
+                            </div>
+                        </section>
+                    </div>
                 </div>
             </main>
 
-            {/* MODALE AVATAR (Permet d'utiliser la variable AVATARS) */}
+            {/* MODALE AVATAR */}
             {showModal && (
                 <div className="modal-overlay" onClick={() => setShowModal(false)}>
                     <div className="avatar-modal" onClick={e => e.stopPropagation()}>
