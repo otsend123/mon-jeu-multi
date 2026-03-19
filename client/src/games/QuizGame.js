@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 function QuizGame({ currentLobby, socket }) {
     const [hasAnswered, setHasAnswered] = useState(false);
+    const [enlargedImage, setEnlargedImage] = useState(null); // NOUVEAU : Gère l'image agrandie
 
     // Récupération de l'état du jeu depuis le serveur
     const gs = currentLobby.gameState;
@@ -10,9 +11,10 @@ function QuizGame({ currentLobby, socket }) {
     // Tri des joueurs par score
     const sortedPlayers = [...currentLobby.players].sort((a, b) => (gs.scores[b.socketId] || 0) - (gs.scores[a.socketId] || 0));
 
-    // Réinitialise le bouton "Répondre" à chaque nouvelle question
+    // Réinitialise le bouton "Répondre" et ferme l'image au changement de question
     useEffect(() => {
         setHasAnswered(false);
+        setEnlargedImage(null);
     }, [gs.currentQuestionIndex]);
 
     const submitAnswer = (answer) => {
@@ -30,18 +32,17 @@ function QuizGame({ currentLobby, socket }) {
                     <>
                         <h2>À quelle catégorie appartient cette personne ?</h2>
                         <div className="quiz-images-container">
-                            {/* Affichage dynamique des 3 images de la question en cours */}
                             {currentQ.images.map((imgSrc, i) => (
                                 <img
                                     key={i}
-                                    src={`/${imgSrc}`} // React ira chercher "/img/1a.jpg" dans le dossier public
+                                    src={`/${imgSrc}`}
                                     alt={`Indice ${i+1}`}
-                                    className="quiz-img"
+                                    className="quiz-img clickable-img"
+                                    onClick={() => setEnlargedImage(imgSrc)} // NOUVEAU : Clic pour agrandir
                                 />
                             ))}
                         </div>
                         <div className="quiz-options">
-                            {/* Affichage des boutons d'options ("Femme trans", "Femme cis", "Autre") */}
                             {currentQ.options.map((opt, i) => (
                                 <button
                                     key={i}
@@ -78,6 +79,13 @@ function QuizGame({ currentLobby, socket }) {
                     </div>
                 ))}
             </div>
+
+            {/* NOUVEAU : OVERLAY POUR L'IMAGE AGRANDIE */}
+            {enlargedImage && (
+                <div className="image-zoom-overlay" onClick={() => setEnlargedImage(null)}>
+                    <img src={`/${enlargedImage}`} alt="Zoom" className="enlarged-img" />
+                </div>
+            )}
         </main>
     );
 }
