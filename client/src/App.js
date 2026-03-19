@@ -1,125 +1,154 @@
-// src/Lobby.jsx
 import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
-import './App.css'; // Assurez-vous d'importer le CSS complet
+import './App.css';
 
-// Configuration de l'URL du serveur (Railway)
-const SERVER_URL = "https://votre-jeu.up.railway.app"; // REMPLACEZ PAR VOTRE URL RAILWAY
-
+// ⚠️ REMPLACE PAR TON URL RAILWAY RÉELLE
+const SERVER_URL = "https://scintillating-inspiration-production.up.railway.app";
 const socket = io(SERVER_URL);
+const AVATAR_LIST = ['🕹️', '👽', '🤖', '👻', '👾', '👨‍🚀', '🐱', '🐲', '🐼', '🦊'];
 
-// Liste des emojis disponibles pour les avatars
-const AVATAR_OPTIONS = ['🕹️', '👽', '🤖', '👻', '👾', '👤', '👨‍🚀', '👸'];
+function App() {
+    // 1. ÉTATS
+    const [user, setUser] = useState(JSON.parse(localStorage.getItem('user')));
+    const [players, setPlayers] = useState([]);
+    const [showModal, setShowModal] = useState(false);
+    const [formData, setFormData] = useState({ email: '', pseudo: '', password: '' });
+    const [isLogin, setIsLogin] = useState(true); // Basculer entre Connexion et Inscription
+    const [error, setError] = useState('');
 
-function Lobby() {
-    // État pour stocker l'utilisateur connecté (récupéré depuis localStorage ou Login)
-    const [user, setUser] = useState(JSON.parse(localStorage.getItem('cyberLobbyUser')));
-    const [players, setPlayers] = useState([]); // Liste des joueurs en ligne
-    const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false); // État de la fenêtre modale
-
+    // 2. SYNCHRONISATION TEMPS RÉEL
     useEffect(() => {
         if (user) {
-            // 1. On signale au serveur qu'on rejoint le lobby
-            socket.emit('joinGame', {
-                id: user.id,
-                pseudo: user.pseudo,
-                avatar: user.avatar
-            });
-
-            // 2. On écoute la liste mise à jour envoyée par le serveur
-            socket.on('updateUserList', (userList) => {
-                setPlayers(userList);
-            });
+            socket.emit('joinGame', user);
+            socket.on('updateUserList', (list) => setPlayers(list));
         }
-
-        // Nettoyage lors de la fermeture du composant
-        return () => {
-            socket.off('updateUserList');
-        };
+        return () => socket.off('updateUserList');
     }, [user]);
 
-    // Fonction pour gérer le changement d'avatar
-    const handleAvatarChange = async (newAvatar) => {
+    // 3. ACTIONS (CONNEXION / INSCRIPTION)
+    const handleAuth = async (e) => {
+        e.preventDefault();
+        setError('');
+        const endpoint = isLogin ? '/login' : '/register';
+
         try {
-            // A. Mise à jour dans la base de données via l'API
-            const response = await fetch(`${SERVER_URL}/api/user/update-avatar`, {
+            const response = await fetch(`${SERVER_URL}${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.id, avatar: newAvatar }),
+                body: JSON.stringify(formData)
             });
-
             const data = await response.json();
 
             if (response.ok) {
-                // B. Mise à jour de l'état local (React)
-                const updatedUser = { ...user, avatar: data.avatar };
-                setUser(updatedUser);
-                // Mise à jour du stockage local
-                localStorage.setItem('cyberLobbyUser', JSON.stringify(updatedUser));
-
-                // C. On avertit le serveur via Socket pour que les autres joueurs voient le changement
-                socket.emit('changeAvatar', data.avatar);
-
-                // D. On ferme la modale
-                setIsAvatarModalOpen(false);
+                localStorage.setItem('user', JSON.stringify(data.user));
+                setUser(data.user);
             } else {
-                alert("Erreur : " + data.error);
+                setError(data.error || 'Une erreur est survenue');
             }
-        } catch (error) {
-            console.error("Erreur d'API :", error);
-            alert("Impossible de contacter le serveur.");
+        } catch (err) {
+            setError('Impossible de contacter le serveur');
         }
     };
 
-    const handleDisconnect = () => {
-        localStorage.removeItem('cyberLobbyUser');
-        window.location.reload(); // Recharger pour simuler une déconnexion
+    const handleAvatarSelect = async (emoji) => {
+        try {
+            const response = await fetch(`${SERVER_URL}/api/user/update-avatar`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ userId: user.id, avatar: emoji })
+            });
+            if (response.ok) {
+                const newUser = { ...user, avatar: emoji };
+                setUser(newUser);
+                localStorage.setItem('user', JSON.stringify(newUser));
+                socket.emit('changeAvatar', emoji);
+                setShowModal(false);
+            }
+        } catch (error) { console.error(error); }
     };
 
-    if (!user) return <div>Vous n'êtes pas connecté.</div>;
+    const logout = () => {
+        localStorage.removeItem('user');
+        setUser(null);
+        window.location.reload();
+    };
 
+    // 4. RENDU : SI PAS CONNECTÉ (Affiche le Formulaire)
+    if (!user) {
+        return (
+            <div className="auth-container">
+                <h1 className="title-cyber">{isLogin ? 'CONNEXION' : 'INSCRIPTION'}</h1>
+                <form onSubmit={handleAuth}>
+                    {!isLogin && (
+                        <input
+                            type="text"
+                            placeholder="Pseudo"
+                            onChange={(e) => setFormData({...formData, pseudo: e.target.value})}
+                            required
+                        />
+                    )}
+                    <input
+                        type="email"
+                        placeholder="Email"
+                        onChange={(e) => setFormData({...formData, email: e.target.value})}
+                        required
+                    />
+                    <input
+                        type="password"
+                        placeholder="Mot de passe"
+                        onChange={(e) => setFormData({...formData, password: e.target.value})}
+                        required
+                    />
+                    <button type="submit" className="btn-cyber">
+                        {isLogin ? 'Se connecter' : "S'inscrire"}
+                    </button>
+                </form>
+                {error && <p className="error-msg">{error}</p>}
+                <p onClick={() => setIsLogin(!isLogin)} style={{cursor: 'pointer', marginTop: '15px'}}>
+                    {isLogin ? "Pas de compte ? S'inscrire" : "Déjà un compte ? Se connecter"}
+                </p>
+            </div>
+        );
+    }
+
+    // 5. RENDU : SI CONNECTÉ (Affiche le Lobby)
     return (
-        <div className="App">
-            {/* --- HEADER --- */}
+        <div>
             <header className="header-cyber">
-                <h1 className="title-cyber">MON JEU MULTI</h1>
-                <div className="user-info-header" onClick={() => setIsAvatarModalOpen(true)}>
-                    <div className="avatar-display-header">{user.avatar}</div>
-                    <div className="pseudo-display-header">{user.pseudo}</div>
-                    <button className="btn-disconnect" onClick={handleDisconnect}>Déconnexion</button>
+                <h1 className="title-cyber">CYBER LOBBY</h1>
+                <div style={{display: 'flex', alignItems: 'center', gap: '20px'}}>
+                    <div className="user-profile-btn" onClick={() => setShowModal(true)}>
+                        <div className="header-avatar">{user.avatar}</div>
+                        <span>{user.pseudo}</span>
+                    </div>
+                    <button className="btn-disconnect" onClick={logout}>Déconnexion</button>
                 </div>
             </header>
 
-            {/* --- ZONE PRINCIPALE --- */}
-            <main className="lobby-main">
-                <h2 className="online-title">Joueurs en ligne :</h2>
-                <div className="player-list-container">
-                    {players.map((player) => (
-                        <div key={player.id} className="player-card">
-                            <div className="player-card-avatar">{player.avatar}</div>
-                            <div className="player-card-pseudo">{player.pseudo}</div>
+            <main className="lobby-content">
+                <h2 className="online-title">Joueurs en ligne</h2>
+                <div className="player-grid">
+                    {players.map(p => (
+                        <div key={p.id} className="player-card">
+                            <span style={{fontSize: '2rem'}}>{p.avatar}</span>
+                            <span>{p.pseudo}</span>
                         </div>
                     ))}
                 </div>
             </main>
 
-            {/* --- FENÊTRE MODALE DE SÉLECTION D'AVATAR --- */}
-            {isAvatarModalOpen && (
+            {showModal && (
                 <div className="modal-overlay">
-                    <div className="avatar-selector-modal">
-                        <h3 className="modal-title">Choisissez votre Avatar</h3>
-                        <div className="avatar-grid">
-                            {AVATAR_OPTIONS.map((option) => (
-                                <div
-                                    key={option}
-                                    className={`avatar-option ${user.avatar === option ? 'selected' : ''}`}
-                                    onClick={() => handleAvatarChange(option)}
-                                >
-                                    {option}
+                    <div className="avatar-modal">
+                        <h2 className="modal-title">Mon Profil</h2>
+                        <div className="avatar-selection-grid">
+                            {AVATAR_LIST.map(emoji => (
+                                <div key={emoji} className="avatar-opt" onClick={() => handleAvatarSelect(emoji)}>
+                                    {emoji}
                                 </div>
                             ))}
                         </div>
-                        <button className="btn-close-modal" onClick={() => setIsAvatarModalOpen(false)}>Annuler</button>
+                        <button className="btn-close-modal" onClick={() => setShowModal(false)}>Annuler</button>
                     </div>
                 </div>
             )}
@@ -127,4 +156,4 @@ function Lobby() {
     );
 }
 
-export default Lobby;
+export default App;
