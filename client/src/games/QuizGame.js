@@ -4,8 +4,16 @@ function QuizGame({ currentLobby, socket, user }) {
     const [hasAnswered, setHasAnswered] = useState(false);
     const [enlargedImage, setEnlargedImage] = useState(null);
 
-    // 🔥 SÉCURITÉ : Vérifie que les données du jeu sont bien chargées
+    // On prépare la variable gs (qui peut être undefined au tout début)
     const gs = currentLobby?.gameState;
+
+    // 🔥 RÈGLE REACT : Les Hooks (useEffect) doivent TOUJOURS être appelés avant les "return" !
+    useEffect(() => {
+        setHasAnswered(false);
+        setEnlargedImage(null);
+    }, [gs?.currentQuestionIndex]); // Le "?" évite de crasher si gs n'est pas encore chargé
+
+    // 🔥 SÉCURITÉ : Maintenant qu'on a passé les Hooks, on peut afficher le Chargement si besoin
     if (!gs || !gs.questions || !user) {
         return <div style={{textAlign: 'center', marginTop: '50px', color: '#00d4ff', fontSize: '1.5rem'}}>Chargement du Quiz en cours...</div>;
     }
@@ -15,11 +23,6 @@ function QuizGame({ currentLobby, socket, user }) {
 
     const answeredCount = Object.keys(gs.answersThisRound || {}).length;
     const isHost = currentLobby.creator === user.pseudo;
-
-    useEffect(() => {
-        setHasAnswered(false);
-        setEnlargedImage(null);
-    }, [gs.currentQuestionIndex]);
 
     const submitAnswer = (answer) => {
         if (!hasAnswered) {
