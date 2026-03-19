@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
 import QuizGame from './games/QuizGame';
-import AdQuizGame from './games/AdQuizGame';
+import AdQuizGame from './games/AdQuizGame'; //
 import './App.css';
 
 const API_URL = "https://mon-jeu-multi-production-ed0c.up.railway.app";
@@ -10,9 +10,13 @@ const socket = io(API_URL, { transports: ['websocket', 'polling'] });
 const AVATARS = ['🕹️', '👽', '🤖', '👻', '👾', '👨‍🚀', '🐱', '🐲', '🐼', '🦊'];
 const AVAILABLE_GAMES = [
     { id: 'quiz', name: 'Quiz Image', icon: '📸' },
-    { id: 'adquiz', name: 'Devine la Pub', icon: '🎬' },
+    { id: 'adquiz', name: 'Devine la Pub', icon: '🎬' }, // 🔥 Catalogue
     { id: 'tictactoe', name: 'Morpion Cyber', icon: '❌' }
 ];
+
+// Dans le rendu du jeu (Vue 3) :
+{currentLobby.selectedGame === 'quiz' && <QuizGame currentLobby={currentLobby} socket={socket} user={user} />}
+{currentLobby.selectedGame === 'adquiz' && <AdQuizGame currentLobby={currentLobby} socket={socket} user={user} />}
 
 function App() {
     const [user, setUser] = useState(JSON.parse(localStorage.getItem('user')));

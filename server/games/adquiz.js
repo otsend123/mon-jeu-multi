@@ -1,9 +1,13 @@
-// server/games/adquiz.js
-
 async function startAdQuizGame(io, lobbies, lobby, prisma) {
     try {
+        if (!prisma.adQuestion) {
+            return io.to(lobby.id).emit('roomError', "La table AdQuestion est introuvable.");
+        }
+
         const allQuestions = await prisma.adQuestion.findMany();
-        if (allQuestions.length === 0) return io.to(lobby.id).emit('roomError', "Aucune vidéo de pub en base !");
+        if (allQuestions.length === 0) {
+            return io.to(lobby.id).emit('roomError', "Aucune vidéo de pub en base de données !");
+        }
 
         const selectedQuestions = allQuestions.sort(() => 0.5 - Math.random()).slice(0, 10);
 
@@ -18,7 +22,7 @@ async function startAdQuizGame(io, lobbies, lobby, prisma) {
             currentQuestionIndex: 0,
             answersThisRound: {},
             roundStatus: 'question',
-            roundEndTime: Date.now() + 360000
+            roundEndTime: Date.now() + 60000
         };
 
         lobby.gameState.timeoutId = setTimeout(() => {
@@ -27,7 +31,9 @@ async function startAdQuizGame(io, lobbies, lobby, prisma) {
 
         io.to(lobby.id).emit('gameStarted', lobby);
         io.emit('updateLobbies', lobbies);
-    } catch (error) { console.error("Erreur AdQuiz:", error); }
+    } catch (error) {
+        io.to(lobby.id).emit('roomError', "Erreur serveur : " + error.message);
+    }
 }
 
 function handleAnswer(io, lobbies, lobby, socketId, answer) {
@@ -49,7 +55,6 @@ function checkRoundEnd(io, lobbies, lobby, force = false) {
 
     if (force || answeredCount >= targetCount) {
         clearTimeout(lobby.gameState.timeoutId);
-
         lobby.gameState.roundStatus = 'result';
         const currentQ = lobby.gameState.questions[lobby.gameState.currentQuestionIndex];
 
@@ -67,12 +72,8 @@ function checkRoundEnd(io, lobbies, lobby, force = false) {
                 lobby.gameState.currentQuestionIndex++;
                 lobby.gameState.answersThisRound = {};
                 lobby.gameState.roundStatus = 'question';
-                lobby.gameState.roundEndTime = Date.now() + 360000;
-
-                lobby.gameState.timeoutId = setTimeout(() => {
-                    forceNext(io, lobbies, lobby);
-                }, 60000);
-
+                lobby.gameState.roundEndTime = Date.now() + 60000;
+                lobby.gameState.timeoutId = setTimeout(() => forceNext(io, lobbies, lobby), 60000);
                 io.to(lobby.id).emit('nextQuestion', lobby);
             } else {
                 lobby.status = 'waiting';
@@ -83,12 +84,12 @@ function checkRoundEnd(io, lobbies, lobby, force = false) {
     }
 }
 
-function handleDisconnection(io, lobbies, lobby) {
-    checkRoundEnd(io, lobbies, lobby);
-}
-
 function forceNext(io, lobbies, lobby) {
     checkRoundEnd(io, lobbies, lobby, true);
+}
+
+function handleDisconnection(io, lobbies, lobby) {
+    checkRoundEnd(io, lobbies, lobby);
 }
 
 module.exports = { startAdQuizGame, handleAnswer, handleDisconnection, forceNext };
