@@ -1,57 +1,66 @@
 const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
 const cors = require('cors');
-const bcrypt = require('bcrypt');
 const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcrypt');
 
 const app = express();
 const prisma = new PrismaClient();
-const server = http.createServer(app);
-
-const io = new Server(server, {
-    cors: { origin: "*", methods: ["GET", "POST"] }
-});
 
 app.use(cors());
 app.use(express.json());
 
-// Message de bienvenue pour éviter le "Cannot GET /"
-app.get('/', (req, res) => res.send("🚀 Serveur de jeu opérationnel !"));
-
-let onlineUsers = [];
-
-io.on('connection', (socket) => {
-    socket.on('join_lobby', (userData) => {
-        onlineUsers = onlineUsers.filter(u => u.pseudo !== userData.pseudo);
-        onlineUsers.push({ ...userData, socketId: socket.id });
-        io.emit('update_user_list', onlineUsers);
-    });
-
-    socket.on('disconnect', () => {
-        onlineUsers = onlineUsers.filter(u => u.socketId !== socket.id);
-        io.emit('update_user_list', onlineUsers);
-    });
-});
-
+// Route d'inscription
 app.post('/register', async (req, res) => {
     try {
         const { email, pseudo, password, birthDate, avatar } = req.body;
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const user = await prisma.user.create({
-            data: { email, pseudo, password: hashedPassword, birthDate: new Date(birthDate), avatar: avatar || '👤' }
+
+        // 1. VERIFICATION : Champs vides
+        if (!email || !pseudo || !password) {
+            console.log("⚠️ Tentative d'inscription avec des champs manquants");
+            return res.status(400).json({ error: "Tous les champs sont obligatoires" });
+        }
+
+        console.log(`🔎 Vérification en base pour : ${email} et ${pseudo}`);
+
+        // 2. VERIFICATION : Doublons
+        const userExists = await prisma.user.findFirst({
+            where: {
+                OR: [
+                    { email: email.toLowerCase() },
+                    { pseudo: pseudo }
+                ]
+            }
         });
-        res.status(201).json({ user: { pseudo: user.pseudo, avatar: user.avatar } });
-    } catch (e) { res.status(400).json({ error: "Email ou Pseudo déjà pris" }); }
+
+        if (userExists) {
+            console.log("❌ Email ou Pseudo déjà utilisé");
+            return res.status(400).json({ error: "Email ou Pseudo déjà pris" });
+        }
+
+        // 3. CREATION : Hachage du mot de passe
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // 4. INSERTION : Nouvel utilisateur
+        const newUser = await prisma.user.create({
+            data: {
+                email: email.toLowerCase(),
+                pseudo: pseudo,
+                password: hashedPassword,
+                birthDate: birthDate ? new Date(birthDate) : null,
+                avatar: avatar || '👤'
+            }
+        });
+
+        console.log("✅ Utilisateur créé avec succès :", newUser.pseudo);
+        res.status(201).json({ message: "Inscription réussie", user: { pseudo: newUser.pseudo } });
+
+    } catch (error) {
+        console.error("🔥 Erreur Serveur détaillée :", error);
+        res.status(500).json({ error: "Erreur interne du serveur" });
+    }
 });
 
-app.post('/login', async (req, res) => {
-    const { email, password } = req.body;
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (user && await bcrypt.compare(password, user.password)) {
-        res.json({ user: { pseudo: user.pseudo, avatar: user.avatar } });
-    } else { res.status(401).json({ error: "Identifiants incorrects" }); }
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => {
+    console.log(`🚀 Serveur CyberLobby en ligne sur le port ${PORT}`);
 });
-
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, '0.0.0.0', () => console.log(`Serveur actif sur le port ${PORT}`));
