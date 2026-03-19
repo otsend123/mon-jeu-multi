@@ -17,15 +17,13 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/', (req, res) => {
-    res.status(200).send("✅ Backend CyberLobby en ligne (Sessions Uniques activées) !");
+    res.status(200).send("✅ Backend CyberLobby en ligne (Choix des jeux activé) !");
 });
 
-// --- ÉTATS DU SERVEUR ---
-let connectedUsers = new Map(); // socketId => Données Utilisateur
-let userSockets = new Map();    // userId => socketId (Pour la session unique)
-let lobbies = [];               // Liste des salons
+let connectedUsers = new Map();
+let userSockets = new Map();
+let lobbies = [];
 
-// Fonction pour retirer un joueur de son salon via son socketId
 function leaveCurrentLobby(socketId) {
     const user = connectedUsers.get(socketId);
     if (!user) return;
@@ -35,14 +33,16 @@ function leaveCurrentLobby(socketId) {
         if (playerIndex !== -1) {
             lobby.players.splice(playerIndex, 1);
 
-            // On retire le socket du canal Socket.io s'il existe encore
             const socketToLeave = io.sockets.sockets.get(socketId);
             if (socketToLeave) socketToLeave.leave(lobby.id);
 
-            // Si le salon est vide, on le supprime
             if (lobby.players.length === 0) {
                 lobbies.splice(index, 1);
             } else {
+                // Si l'hôte quitte, on nomme le joueur suivant comme nouvel hôte (Optionnel mais pratique)
+                if (lobby.creator === user.pseudo && lobby.players.length > 0) {
+                    lobby.creator = lobby.players[0].pseudo;
+                }
                 io.to(lobby.id).emit('lobbyUpdated', lobby);
             }
         }
@@ -52,20 +52,14 @@ function leaveCurrentLobby(socketId) {
 
 io.on('connection', (socket) => {
 
-    // 1. REJOINDRE LE JEU (Avec vérification de session unique)
     socket.on('joinGame', (userData) => {
-        // --- SYSTÈME DE SESSION UNIQUE ---
         if (userSockets.has(userData.id)) {
             const oldSocketId = userSockets.get(userData.id);
-            // On prévient l'ancien onglet de se fermer
-            io.to(oldSocketId).emit('forceDisconnect', "Ce compte a été connecté depuis un autre appareil ou onglet.");
-
-            // On nettoie l'ancienne présence
+            io.to(oldSocketId).emit('forceDisconnect', "Ce compte a été connecté depuis un autre appareil.");
             leaveCurrentLobby(oldSocketId);
             connectedUsers.delete(oldSocketId);
         }
 
-        // On enregistre la nouvelle connexion
         userSockets.set(userData.id, socket.id);
         connectedUsers.set(socket.id, {
             socketId: socket.id,
@@ -78,7 +72,6 @@ io.on('connection', (socket) => {
         socket.emit('updateLobbies', lobbies);
     });
 
-    // 2. CRÉER UN SALON
     socket.on('createLobby', (lobbyName) => {
         const user = connectedUsers.get(socket.id);
         if (user && lobbyName.trim() !== '') {
@@ -88,7 +81,8 @@ io.on('connection', (socket) => {
                 id: `room_${Date.now()}`,
                 name: lobbyName,
                 creator: user.pseudo,
-                players: [user]
+                players: [user],
+                selectedGame: null // <-- NOUVEAU : Stocke l'ID du jeu choisi
             };
             lobbies.push(newLobby);
 
@@ -98,7 +92,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 3. REJOINDRE UN SALON EXISTANT
     socket.on('joinLobby', (lobbyId) => {
         const user = connectedUsers.get(socket.id);
         const lobby = lobbies.find(l => l.id === lobbyId);
@@ -118,27 +111,34 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 4. QUITTER LE SALON ACTUEL
     socket.on('leaveLobby', () => {
         leaveCurrentLobby(socket.id);
         socket.emit('lobbyLeft');
     });
 
-    // 5. SYSTÈME D'INVITATION
+    // --- NOUVEAU : SÉLECTIONNER UN JEU ---
+    socket.on('selectGame', ({ lobbyId, gameId }) => {
+        const lobby = lobbies.find(l => l.id === lobbyId);
+        const user = connectedUsers.get(socket.id);
+
+        // Seul le créateur peut changer le jeu
+        if (lobby && user && lobby.creator === user.pseudo) {
+            lobby.selectedGame = gameId;
+            io.to(lobby.id).emit('lobbyUpdated', lobby);
+            io.emit('updateLobbies', lobbies); // Pour l'afficher sur l'accueil si on veut
+        }
+    });
+
     socket.on('invitePlayer', ({ targetSocketId, lobbyId }) => {
         const sender = connectedUsers.get(socket.id);
         const lobby = lobbies.find(l => l.id === lobbyId);
-
         if (sender && lobby) {
             socket.to(targetSocketId).emit('receiveInvite', {
-                lobbyId: lobby.id,
-                lobbyName: lobby.name,
-                senderName: sender.pseudo
+                lobbyId: lobby.id, lobbyName: lobby.name, senderName: sender.pseudo
             });
         }
     });
 
-    // 6. CHANGEMENT D'AVATAR
     socket.on('changeAvatar', (newAvatar) => {
         const user = connectedUsers.get(socket.id);
         if (user) {
@@ -154,11 +154,10 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 7. DÉCONNEXION NATURELLE (Fermeture de page, perte de co)
     socket.on('disconnect', () => {
         const user = connectedUsers.get(socket.id);
         if (user) {
-            userSockets.delete(user.id); // Libère l'ID utilisateur
+            userSockets.delete(user.id);
             leaveCurrentLobby(socket.id);
             connectedUsers.delete(socket.id);
             io.emit('updateUserList', Array.from(connectedUsers.values()));
@@ -166,7 +165,6 @@ io.on('connection', (socket) => {
     });
 });
 
-// --- ROUTES API (Authentification) ---
 app.post('/register', async (req, res) => {
     try {
         const { email, pseudo, password } = req.body;
@@ -192,8 +190,7 @@ app.post('/api/user/update-avatar', async (req, res) => {
     try {
         const { userId, avatar } = req.body;
         const updated = await prisma.user.update({
-            where: { id: parseInt(userId) },
-            data: { avatar }
+            where: { id: parseInt(userId) }, data: { avatar }
         });
         res.json({ avatar: updated.avatar });
     } catch (err) { res.status(500).json({ error: "Erreur mise à jour." }); }

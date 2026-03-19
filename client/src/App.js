@@ -5,7 +5,15 @@ import './App.css';
 // ⚠️ URL DE TON BACKEND RAILWAY
 const API_URL = "https://mon-jeu-multi-production-ed0c.up.railway.app";
 const socket = io(API_URL, { transports: ['websocket', 'polling'] });
+
 const AVATARS = ['🕹️', '👽', '🤖', '👻', '👾', '👨‍🚀', '🐱', '🐲', '🐼', '🦊'];
+
+// NOUVEAU : Liste des jeux disponibles
+const AVAILABLE_GAMES = [
+    { id: 'tictactoe', name: 'Morpion Cyber', icon: '❌' },
+    { id: 'battleship', name: 'Bataille Navale', icon: '🚢' },
+    { id: 'pong', name: 'Néon Pong', icon: '🏓' }
+];
 
 function App() {
     const [user, setUser] = useState(JSON.parse(localStorage.getItem('user')));
@@ -16,7 +24,6 @@ function App() {
     const [error, setError] = useState('');
     const [form, setForm] = useState({ email: '', pseudo: '', password: '' });
 
-    // Lobbies & Invitations
     const [lobbies, setLobbies] = useState([]);
     const [newLobbyName, setNewLobbyName] = useState('');
     const [currentLobby, setCurrentLobby] = useState(null);
@@ -35,8 +42,6 @@ function App() {
             socket.on('roomError', (msg) => alert(msg));
 
             socket.on('receiveInvite', (data) => setInvite(data));
-
-            // --- NOUVEAU : DÉCONNEXION FORCÉE SI DOUBLE ONGLET ---
             socket.on('forceDisconnect', (msg) => {
                 alert(msg);
                 localStorage.removeItem('user');
@@ -61,8 +66,7 @@ function App() {
         setError('Tentative de connexion...');
         try {
             const res = await fetch(`${API_URL}${isLogin ? '/login' : '/register'}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(form)
             });
             const data = await res.json();
@@ -105,6 +109,13 @@ function App() {
         }
     };
 
+    // NOUVEAU : Fonction pour sélectionner un jeu
+    const handleSelectGame = (gameId) => {
+        if (currentLobby && currentLobby.creator === user.pseudo) {
+            socket.emit('selectGame', { lobbyId: currentLobby.id, gameId });
+        }
+    };
+
     if (!user) {
         return (
             <div className="auth-container">
@@ -126,59 +137,99 @@ function App() {
     // --- VUE : SALLE D'ATTENTE (ROOM) ---
     if (currentLobby) {
         const slots = [...Array(8)].map((_, index) => currentLobby.players[index] || null);
+        const isHost = currentLobby.creator === user.pseudo;
+        const selectedGameObj = AVAILABLE_GAMES.find(g => g.id === currentLobby.selectedGame);
+
         return (
             <div className="App">
                 <header className="header-cyber">
                     <h1 className="title-cyber">{currentLobby.name}</h1>
                     <button className="btn-disconnect" onClick={() => socket.emit('leaveLobby')}>🚪 Quitter le salon</button>
                 </header>
-                <main className="main-dashboard dashboard-top">
-                    <section className="panel-section room-section">
-                        <h2 className="panel-title">Équipe ({currentLobby.players.length}/8)</h2>
-                        <div className="slots-grid">
-                            {slots.map((player, idx) => (
-                                player ? (
-                                    <div key={idx} className="slot-card filled">
-                                        <div className="slot-avatar">{player.avatar}</div>
-                                        <div className="slot-name">{player.pseudo}</div>
-                                    </div>
+                <main className="main-dashboard">
+                    <div className="dashboard-top">
+                        <section className="panel-section room-section">
+                            <h2 className="panel-title">Équipe ({currentLobby.players.length}/8)</h2>
+                            <div className="slots-grid">
+                                {slots.map((player, idx) => (
+                                    player ? (
+                                        <div key={idx} className="slot-card filled">
+                                            <div className="slot-avatar">{player.avatar}</div>
+                                            <div className="slot-name">{player.pseudo}</div>
+                                            {player.pseudo === currentLobby.creator && <div className="host-badge">👑 Hôte</div>}
+                                        </div>
+                                    ) : (
+                                        <div key={idx} className="slot-card empty">
+                                            <div className="slot-avatar">?</div>
+                                            <div className="slot-name empty-text">Vide</div>
+                                        </div>
+                                    )
+                                ))}
+                            </div>
+
+                            {/* BOUTON LANCER LA PARTIE (Uniquement pour l'Hôte) */}
+                            <div style={{marginTop: '25px', textAlign: 'center'}}>
+                                {isHost ? (
+                                    <button
+                                        className={`btn-cyber ${!currentLobby.selectedGame ? 'btn-disabled' : ''}`}
+                                        style={{width: '250px'}}
+                                        disabled={!currentLobby.selectedGame}
+                                    >
+                                        {currentLobby.selectedGame ? `Lancer ${selectedGameObj.name}` : "Choisissez un jeu"}
+                                    </button>
                                 ) : (
-                                    <div key={idx} className="slot-card empty">
-                                        <div className="slot-avatar">?</div>
-                                        <div className="slot-name empty-text">Vide</div>
+                                    <p style={{color: '#00d4ff'}}>En attente de l'Hôte...</p>
+                                )}
+                            </div>
+                        </section>
+
+                        <section className="panel-section players-section">
+                            <h2 className="panel-title">Inviter des joueurs</h2>
+                            <div className="table-container">
+                                <table className="players-table">
+                                    <tbody>
+                                    {players.filter(p => p.pseudo !== user.pseudo).map(p => {
+                                        const isInLobby = currentLobby.players.some(lobbyP => lobbyP.pseudo === p.pseudo);
+                                        return (
+                                            <tr key={p.socketId}>
+                                                <td width="50" className="td-center"><span className="player-avatar">{p.avatar}</span></td>
+                                                <td>{p.pseudo}</td>
+                                                <td className="td-center">
+                                                    {isInLobby ? (
+                                                        <span style={{color: '#888'}}>Dans le salon</span>
+                                                    ) : (
+                                                        <button className="btn-join" onClick={() => handleInvite(p.socketId)}>Inviter</button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
+
+                    {/* NOUVEAU : SELECTION DU JEU DANS LE SALON */}
+                    <div className="dashboard-bottom">
+                        <section className="panel-section games-section">
+                            <h2 className="panel-title">
+                                Choix du jeu {selectedGameObj && <span style={{color: '#fff'}}>: {selectedGameObj.name}</span>}
+                            </h2>
+                            <div className="games-grid">
+                                {AVAILABLE_GAMES.map(game => (
+                                    <div
+                                        key={game.id}
+                                        className={`game-card ${currentLobby.selectedGame === game.id ? 'selected' : ''} ${!isHost ? 'disabled' : ''}`}
+                                        onClick={() => handleSelectGame(game.id)}
+                                    >
+                                        <div className="game-icon">{game.icon}</div>
+                                        <div className="game-name">{game.name}</div>
                                     </div>
-                                )
-                            ))}
-                        </div>
-                        <div style={{marginTop: '20px', textAlign: 'center'}}>
-                            <button className="btn-cyber" style={{width: '200px'}}>Lancer la partie</button>
-                        </div>
-                    </section>
-                    <section className="panel-section players-section">
-                        <h2 className="panel-title">Inviter des joueurs</h2>
-                        <div className="table-container">
-                            <table className="players-table">
-                                <tbody>
-                                {players.filter(p => p.pseudo !== user.pseudo).map(p => {
-                                    const isInLobby = currentLobby.players.some(lobbyP => lobbyP.pseudo === p.pseudo);
-                                    return (
-                                        <tr key={p.socketId}>
-                                            <td width="50" className="td-center"><span className="player-avatar">{p.avatar}</span></td>
-                                            <td>{p.pseudo}</td>
-                                            <td className="td-center">
-                                                {isInLobby ? (
-                                                    <span style={{color: '#888'}}>Dans le salon</span>
-                                                ) : (
-                                                    <button className="btn-join" onClick={() => handleInvite(p.socketId)}>Inviter</button>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                                </tbody>
-                            </table>
-                        </div>
-                    </section>
+                                ))}
+                            </div>
+                        </section>
+                    </div>
                 </main>
             </div>
         );
@@ -225,7 +276,7 @@ function App() {
                                             <span className="lobby-creator">Hôte: {lobby.creator}</span>
                                         </div>
                                         <div className="lobby-actions">
-                                            <span className="lobby-count">{lobby.players.length}/8 joueur(s)</span>
+                                            <span className="lobby-count">{lobby.players.length}/8</span>
                                             <button className="btn-join" onClick={() => socket.emit('joinLobby', lobby.id)}>Rejoindre</button>
                                         </div>
                                     </div>
@@ -251,12 +302,18 @@ function App() {
                         </div>
                     </section>
                 </div>
+
+                {/* CATALOGUE GÉNÉRAL EN BAS */}
                 <div className="dashboard-bottom">
                     <section className="panel-section games-section">
-                        <h2 className="panel-title">Catalogue des Jeux (À venir)</h2>
-                        <div className="games-placeholder">
-                            <div className="game-card-placeholder">Jeu 1</div>
-                            <div className="game-card-placeholder">Jeu 2</div>
+                        <h2 className="panel-title">Catalogue des Jeux</h2>
+                        <div className="games-grid">
+                            {AVAILABLE_GAMES.map(game => (
+                                <div key={game.id} className="game-card disabled">
+                                    <div className="game-icon">{game.icon}</div>
+                                    <div className="game-name">{game.name}</div>
+                                </div>
+                            ))}
                         </div>
                     </section>
                 </div>
