@@ -2,15 +2,15 @@
 
 async function startQuizGame(io, lobbies, lobby, prisma) {
     try {
-        // Récupération des questions depuis la BDD
+        // Récupération de toutes les questions en BDD
         const allQuestions = await prisma.question.findMany();
 
         if (allQuestions.length === 0) {
-            io.to(lobby.id).emit('roomError', "Aucune question en base !");
+            io.to(lobby.id).emit('roomError', "Aucune question disponible en base de données !");
             return;
         }
 
-        // Sélection de 5 questions aléatoires
+        // Sélection aléatoire de 5 questions
         const selectedQuestions = allQuestions.sort(() => 0.5 - Math.random()).slice(0, 5);
 
         lobby.status = 'playing';
@@ -19,16 +19,16 @@ async function startQuizGame(io, lobbies, lobby, prisma) {
             currentQuestionIndex: 0,
             scores: {},
             answersThisRound: {},
-            roundStatus: 'question'
+            roundStatus: 'question' // 'question' ou 'result'
         };
 
-        // Initialisation des scores
+        // Initialisation des scores à 0
         lobby.players.forEach(p => lobby.gameState.scores[p.socketId] = 0);
 
         io.to(lobby.id).emit('gameStarted', lobby);
         io.emit('updateLobbies', lobbies);
     } catch (error) {
-        console.error("Erreur Quiz:", error);
+        console.error("Erreur lors du lancement du Quiz :", error);
     }
 }
 

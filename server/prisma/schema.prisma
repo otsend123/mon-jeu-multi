@@ -17,7 +17,7 @@ model User {
   createdAt DateTime @default(now())
 }
 
-// Table pour stocker les questions du quiz
+// Nouvelle table pour le Quiz
 model Question {
   id        Int      @id @default(autoincrement())
   images    String[] // Exemple: ["img/1a.jpg", "img/1b.jpg", "img/1c.jpg"]
