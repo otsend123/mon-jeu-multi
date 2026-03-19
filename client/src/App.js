@@ -56,7 +56,7 @@ function App() {
 
         socket.on('gameOver', (lobby) => {
             setCurrentLobby(lobby);
-            alert("La partie est terminée ! Regardez le classement final.");
+            alert("La partie est terminée !");
         });
 
         socket.on('forceDisconnect', (msg) => {
@@ -81,7 +81,6 @@ function App() {
             socket.off('gameOver');
             socket.off('forceDisconnect');
         };
-        // 🔥 On demande à React d'ignorer l'avertissement sur cette ligne précise
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user?.id]);
 
@@ -94,40 +93,25 @@ function App() {
         setError('Tentative de connexion...');
         try {
             const res = await fetch(`${API_URL}${isLogin ? '/login' : '/register'}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(form)
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form)
             });
             const data = await res.json();
             if (res.ok) {
-                localStorage.setItem('user', JSON.stringify(data.user));
-                setUser(data.user);
-                setError('');
-            } else {
-                setError(data.error);
-            }
-        } catch (err) {
-            setError("Serveur injoignable.");
-        }
+                localStorage.setItem('user', JSON.stringify(data.user)); setUser(data.user); setError('');
+            } else { setError(data.error); }
+        } catch (err) { setError("Serveur injoignable."); }
     };
 
     const updateAvatar = async (emoji) => {
         try {
             const res = await fetch(`${API_URL}/api/user/update-avatar`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ userId: user.id, avatar: emoji })
+                method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user.id, avatar: emoji })
             });
             if (res.ok) {
-                const updated = { ...user, avatar: emoji };
-                setUser(updated);
-                localStorage.setItem('user', JSON.stringify(updated));
-                socket.emit('changeAvatar', emoji);
-                setShowModal(false);
+                const updated = { ...user, avatar: emoji }; setUser(updated);
+                localStorage.setItem('user', JSON.stringify(updated)); socket.emit('changeAvatar', emoji); setShowModal(false);
             }
-        } catch (e) {
-            console.error(e);
-        }
+        } catch (e) { console.error(e); }
     };
 
     // --- VUE 0 : NON CONNECTÉ ---
@@ -153,6 +137,7 @@ function App() {
     if (currentLobby && currentLobby.status === 'playing') {
         const currentQIndex = currentLobby.gameState?.currentQuestionIndex || 0;
         const totalQ = currentLobby.gameState?.questions?.length || 0;
+        const isHost = currentLobby.creator === user.pseudo;
 
         return (
             <div className="App game-mode">
@@ -160,6 +145,14 @@ function App() {
                     <h1 className="title-cyber">
                         {currentLobby.selectedGame === 'quiz' ? `QUIZ - Question ${currentQIndex + 1}/${totalQ}` : currentLobby.name}
                     </h1>
+
+                    {/* 🔥 NOUVEAU : Boutons pour quitter la partie en cours */}
+                    <div style={{display: 'flex', gap: '15px'}}>
+                        {isHost && (
+                            <button className="btn-disconnect" onClick={() => socket.emit('stopGame', currentLobby.id)}>⏹️ Arrêter</button>
+                        )}
+                        <button className="btn-disconnect" onClick={() => socket.emit('leaveLobby')}>🚪 Quitter</button>
+                    </div>
                 </header>
                 {currentLobby.selectedGame === 'quiz' && (
                     <QuizGame currentLobby={currentLobby} socket={socket} user={user} />
@@ -188,7 +181,17 @@ function App() {
                                 player ? (
                                     <div key={idx} className="slot-card filled">
                                         <div className="slot-avatar">{player.avatar}</div>
-                                        <div className="slot-name">{player.pseudo}</div>
+
+                                        <div className="slot-name">
+                                            {player.pseudo}
+                                            {/* 🔥 NOUVEAU : Affiche le score cumulé des parties précédentes ! */}
+                                            {currentLobby.scores && currentLobby.scores[player.pseudo] !== undefined && (
+                                                <span style={{color: '#00ff00', display: 'block', fontSize: '0.85rem', marginTop: '2px'}}>
+                                                    {currentLobby.scores[player.pseudo]} pts
+                                                </span>
+                                            )}
+                                        </div>
+
                                         {player.pseudo === currentLobby.creator && <div className="host-badge">👑 Hôte</div>}
                                     </div>
                                 ) : (
@@ -235,6 +238,7 @@ function App() {
     }
 
     // --- VUE 1 : ACCUEIL LOBBY ---
+    // (Le reste de l'App.js reste identique)
     return (
         <div className="App">
             <header className="header-cyber">

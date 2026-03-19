@@ -4,22 +4,21 @@ function QuizGame({ currentLobby, socket, user }) {
     const [hasAnswered, setHasAnswered] = useState(false);
     const [enlargedImage, setEnlargedImage] = useState(null);
 
-    // On prépare la variable gs (qui peut être undefined au tout début)
     const gs = currentLobby?.gameState;
 
-    // 🔥 RÈGLE REACT : Les Hooks (useEffect) doivent TOUJOURS être appelés avant les "return" !
     useEffect(() => {
         setHasAnswered(false);
         setEnlargedImage(null);
-    }, [gs?.currentQuestionIndex]); // Le "?" évite de crasher si gs n'est pas encore chargé
+    }, [gs?.currentQuestionIndex]);
 
-    // 🔥 SÉCURITÉ : Maintenant qu'on a passé les Hooks, on peut afficher le Chargement si besoin
     if (!gs || !gs.questions || !user) {
         return <div style={{textAlign: 'center', marginTop: '50px', color: '#00d4ff', fontSize: '1.5rem'}}>Chargement du Quiz en cours...</div>;
     }
 
     const currentQ = gs.questions[gs.currentQuestionIndex];
-    const sortedPlayers = [...currentLobby.players].sort((a, b) => (gs.scores[b.socketId] || 0) - (gs.scores[a.socketId] || 0));
+
+    // 🔥 NOUVEAU : On utilise currentLobby.scores pour le tri et l'affichage (Persistance)
+    const sortedPlayers = [...currentLobby.players].sort((a, b) => (currentLobby.scores?.[b.pseudo] || 0) - (currentLobby.scores?.[a.pseudo] || 0));
 
     const answeredCount = Object.keys(gs.answersThisRound || {}).length;
     const isHost = currentLobby.creator === user.pseudo;
@@ -95,7 +94,7 @@ function QuizGame({ currentLobby, socket, user }) {
                         <span className="score-rank">#{idx + 1}</span>
                         <span className="score-avatar">{p.avatar}</span>
                         <span className="score-pseudo">{p.pseudo}</span>
-                        <span className="score-points">{gs.scores[p.socketId] || 0} pts</span>
+                        <span className="score-points">{currentLobby.scores?.[p.pseudo] || 0} pts</span>
                     </div>
                 ))}
             </div>

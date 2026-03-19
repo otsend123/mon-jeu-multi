@@ -15,7 +15,7 @@ const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } 
 app.use(cors());
 app.use(express.json());
 
-app.get('/', (req, res) => res.status(200).send("✅ Backend CyberLobby (Reconnexion F5) en ligne !"));
+app.get('/', (req, res) => res.status(200).send("✅ Backend CyberLobby (Scores Persistants) en ligne !"));
 
 let connectedUsers = new Map();
 let userSockets = new Map();
@@ -54,14 +54,10 @@ io.on('connection', (socket) => {
     socket.on('joinGame', (userData) => {
         if (userSockets.has(userData.id)) {
             const oldSocketId = userSockets.get(userData.id);
-
-            // Si c'est exactement la même connexion qui renvoie l'event (bug React), on ignore
             if (oldSocketId === socket.id) return;
 
             const activeLobby = lobbies.find(l => l.players.some(p => p.id === userData.id));
-
             if (activeLobby) {
-                // Le joueur rafraîchit pendant qu'il était dans un salon
                 const player = activeLobby.players.find(p => p.id === userData.id);
                 player.socketId = socket.id;
 
@@ -72,7 +68,6 @@ io.on('connection', (socket) => {
                 connectedUsers.delete(oldSocketId);
                 socket.emit('lobbyJoined', activeLobby);
             } else {
-                // S'il n'était pas en jeu, on déconnecte le fantôme précédent
                 io.to(oldSocketId).emit('forceDisconnect', "Double connexion détectée.");
                 leaveCurrentLobby(oldSocketId);
                 connectedUsers.delete(oldSocketId);
@@ -95,6 +90,7 @@ io.on('connection', (socket) => {
             const newLobby = {
                 id: `room_${Date.now()}`, name: lobbyName, creator: user.pseudo,
                 players: [user], selectedGame: null, status: 'waiting'
+                // On garde les scores globaux du salon dans "lobby.scores" (créé au premier jeu)
             };
             lobbies.push(newLobby);
             socket.join(newLobby.id);
@@ -135,6 +131,18 @@ io.on('connection', (socket) => {
         const user = connectedUsers.get(socket.id);
         if (lobby && user && lobby.creator === user.pseudo) {
             if (lobby.selectedGame === 'quiz') await quizGame.startQuizGame(io, lobbies, lobby, prisma);
+        }
+    });
+
+    // 🔥 NOUVEAU : Le bouton pour forcer l'arrêt total du jeu
+    socket.on('stopGame', (lobbyId) => {
+        const lobby = lobbies.find(l => l.id === lobbyId);
+        const user = connectedUsers.get(socket.id);
+        if (lobby && user && lobby.creator === user.pseudo && lobby.status === 'playing') {
+            lobby.status = 'waiting';
+            lobby.gameState = null; // On nettoie le jeu
+            io.to(lobby.id).emit('lobbyUpdated', lobby);
+            io.emit('updateLobbies', lobbies);
         }
     });
 
@@ -183,20 +191,17 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 🔥 NOUVEAU : DÉLAI DE GRÂCE AU RAFRAÎCHISSEMENT
     socket.on('disconnect', () => {
         const user = connectedUsers.get(socket.id);
         if (user) {
-            // On laisse 3 secondes au joueur pour revenir
             setTimeout(() => {
-                // Si l'ID mémorisé est TOUJOURS celui qui vient de se déconnecter, c'est qu'il n'est pas revenu
                 if (userSockets.get(user.id) === socket.id) {
                     userSockets.delete(user.id);
                     leaveCurrentLobby(socket.id);
                     connectedUsers.delete(socket.id);
                     io.emit('updateUserList', Array.from(connectedUsers.values()));
                 }
-            }, 3000); // 3000 millisecondes
+            }, 3000);
         }
     });
 });
